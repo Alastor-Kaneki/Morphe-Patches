@@ -72,6 +72,7 @@ internal val addDiscordCustomizationManifestPatch = resourcePatch(
     }
 
     execute {
+        val appName = requireNotNull(customAppName)
         val iconFile = customIcon.file
         var customIconResource: String? = null
 
@@ -87,14 +88,13 @@ internal val addDiscordCustomizationManifestPatch = resourcePatch(
             val application =
                 document.getElementsByTagName("application").item(0) as Element
 
-            application.setAttribute("android:label", customAppName)
+            application.setAttribute("android:label", appName)
             customIconResource?.let { resource ->
                 application.setAttribute("android:icon", resource)
                 application.setAttribute("android:roundIcon", resource)
             }
 
-            val launcherTags = listOf("activity", "activity-alias")
-            launcherTags.forEach { tag ->
+            listOf("activity", "activity-alias").forEach { tag ->
                 val nodes = application.getElementsByTagName(tag)
                 for (index in 0 until nodes.length) {
                     val element = nodes.item(index) as Element
@@ -118,7 +118,7 @@ internal val addDiscordCustomizationManifestPatch = resourcePatch(
                         }
                     }
                     if (launcher) {
-                        element.setAttribute("android:label", customAppName)
+                        element.setAttribute("android:label", appName)
                         customIconResource?.let { resource ->
                             element.setAttribute("android:icon", resource)
                         }
@@ -158,15 +158,13 @@ internal val addDiscordCustomizationManifestPatch = resourcePatch(
     }
 
     finalize {
-        val replacementPackage = customPackageName
+        val replacementPackage = requireNotNull(customPackageName)
         val providerStringResources = mutableSetOf<String>()
 
         document("AndroidManifest.xml").use { document ->
             val manifest = document.documentElement
             val allElements = document.getElementsByTagName("*")
 
-            // Relative component names resolve against the manifest package. Qualify
-            // them before changing that package so Discord classes keep resolving.
             for (index in 0 until allElements.length) {
                 val element = allElements.item(index) as Element
                 if (element.tagName in componentTags && element.hasAttribute("android:name")) {
