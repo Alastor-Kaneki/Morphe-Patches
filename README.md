@@ -26,6 +26,11 @@ The button attempts to detect the current GX Store URL from Opera's current tab,
 address bar, navigation objects, intent, or clipboard. If Opera does not expose
 the complete URL, it opens a small paste dialog rather than failing silently.
 
+The floating button follows Opera GX's active theme at runtime. It reads the
+app's surface, primary/accent, and foreground colors, adapts separately to
+Opera's own light and dark themes, and automatically chooses readable text,
+border, and ripple colors when a theme exposes low-contrast values.
+
 The injected downloader reads the public GX Store page, resolves either a direct
 `mod.crx` URL or a version-matched `/contents/` asset URL, and queues the package
 through Android Download Manager.
