@@ -50,10 +50,12 @@ jobs:
             exit 1
           fi
 
+          RELEASE_DESCRIPTION="Morphe Patches ${VERSION}. Includes the Opera GX raw mod downloader and Discord Nitro custom-theme CSS/PNG exporter."
+
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
               --title "Morphe Patches ${TAG}" \
-              --notes "Built Morphe patch bundle for ${TAG}. Includes the Opera GX raw mod downloader patch."
+              --notes "$RELEASE_DESCRIPTION"
           fi
           gh release upload "$TAG" "${BUNDLES[@]}" --clobber
 
@@ -65,7 +67,7 @@ jobs:
 
           SOURCE_METADATA="$(jq -n \
             --arg created_at "$CREATED_AT" \
-            --arg description "Morphe Patches ${VERSION}. Includes the Opera GX raw mod downloader patch." \
+            --arg description "$RELEASE_DESCRIPTION" \
             --arg download_url "$DOWNLOAD_URL" \
             --arg signature_download_url "" \
             --arg version "$VERSION" \
