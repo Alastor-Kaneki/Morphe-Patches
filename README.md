@@ -27,9 +27,8 @@ address bar, navigation objects, intent, or clipboard. If Opera does not expose
 the complete URL, it opens a small paste dialog rather than failing silently.
 
 The floating button follows Opera GX's active theme at runtime. It reads the
-app's surface, primary/accent, and foreground colors, adapts separately to
-Opera's own light and dark themes, and automatically chooses readable text,
-border, and ripple colors when a theme exposes low-contrast values.
+app's surface, primary/accent, and foreground colors and automatically chooses
+readable text, border, and ripple colors.
 
 The injected downloader reads the public GX Store page, resolves either a direct
 `mod.crx` URL or a version-matched `/contents/` asset URL, and queues the package
@@ -49,88 +48,6 @@ Opera GX Mobile is heavily obfuscated and its internal menu code changes between
 versions. The patch starts its overlay through an injected Android
 `ContentProvider` rather than hooking a version-specific Opera menu method. The
 share-sheet target remains available as a fallback.
-
-### Discord — Export Nitro custom themes
-
-Targets the Android Discord package (`com.discord`). It adds a theme-aware
-**Export Theme ↓** button to Discord's Appearance/custom-theme screens.
-
-The patch does not unlock Nitro, modify billing state, or create a separate theme
-system. It exports only the theme Discord already exposes to the signed-in
-account.
-
-#### Usage
-
-1. Patch a full Discord Android APK using the generated `.mpp` bundle.
-2. Enable **Export Nitro custom theme** in Morphe Manager.
-3. Install the patched Discord APK.
-4. Open Discord **Settings → Appearance → Custom Theme** or a custom-theme preview.
-5. Tap **Export Theme ↓**.
-
-Two files are saved under `Downloads/DiscordThemes/`:
-
-- `discord-custom-theme-<timestamp>.css`
-- `discord-custom-theme-<timestamp>.png`
-
-The CSS contains the detected five-color palette, a matching gradient, portable
-custom properties, and commonly used Discord-style color aliases. The PNG is a
-clean generated preview card, not a screenshot of chats or account information.
-
-#### Privacy and compatibility
-
-The exporter briefly samples the visible theme screen in memory to detect colors,
-then discards those pixels. It never writes the captured Discord screen to disk.
-Discord's internal CSS variable names can change, so the exported CSS includes
-portable variables first and compatibility aliases second.
-
-The overlay is activated through an injected Android `ContentProvider` and scans
-visible labels/resource names for Discord's Appearance and custom-theme screens,
-avoiding version-specific hooks into Discord's obfuscated UI code.
-
-### Discord — Customization and side-by-side clone
-
-The **Discord customization and clone** patch adds both patch-time branding and a
-local in-app customizer.
-
-Patch options:
-
-- **App name** — defaults to `Discord Morphe`.
-- **Package name** — defaults to `com.discord.morphe`, allowing installation next
-  to the official `com.discord` app.
-- **Custom app icon** — accepts a PNG, JPG, JPEG, or WebP image and applies it to
-  the launcher, installer, and Android app settings.
-
-When the package ID is changed, the patch also qualifies relative Android
-component names and rewrites Discord-scoped provider authorities and custom
-permissions to reduce side-by-side installation conflicts.
-
-Inside the patched app, open Discord **Settings → Appearance** and tap
-**Customize ✦**. The native customizer can:
-
-- select a custom image overlay for Discord's UI;
-- control image opacity from 5% to 60%;
-- load a local TTF or OTF font across Discord text views;
-- clear either customization and return to Discord defaults.
-
-The chosen image and font URI remain local to the cloned app. The patch does not
-upload either file or synchronize it through Discord.
-
-### Discord — Restore previous navigation
-
-Discord introduced the mobile **You Bar** in June 2026. The
-**Restore previous Discord navigation** patch covers that bar with classic
-**Servers**, **Messages**, **Notifications**, and **You** controls.
-
-The controller searches Discord's visible labels, accessibility descriptions,
-and resource names, then delegates each classic button to Discord's own existing
-navigation destination. It also recognizes the You Bar when possible and keeps it
-invisible while the classic bar is active. A swipe fallback is used for switching
-between DMs and the current server on builds that expose only the You Bar gesture.
-
-Because Discord's React Native UI is frequently changed and obfuscated, this is a
-version-resilient compatibility overlay rather than a permanent hook into one
-specific Discord build. Unsupported builds display a short message instead of
-silently opening the wrong screen.
 
 ## Repository structure
 
@@ -172,17 +89,6 @@ workflow artifact.
 - Caps fetched page HTML at 12 MB.
 - Does not read cookies, credentials, browser history, or installed mods.
 - Does not install the downloaded package.
-
-## Discord patch security behavior
-
-- Does not bypass Nitro eligibility or alter account state.
-- Does not call Discord billing or account APIs.
-- Does not save screenshots of Discord screens.
-- Saves theme-export CSS and PNG files only under `Downloads/DiscordThemes/`.
-- Keeps selected customization image/font references in private app preferences.
-- Does not upload custom images or fonts.
-- The navigation patch delegates to existing Discord UI controls and does not
-  inspect or store message content.
 
 ## License
 

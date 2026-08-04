@@ -3,7 +3,7 @@ group = "dev.alastorkaneki"
 patches {
     about {
         name = "Alastor Kaneki Morphe Patches"
-        description = "Morphe patches for Opera GX downloads and Discord theme export, cloning, branding, image/font customization, and legacy navigation."
+        description = "Morphe patches for downloading raw Opera GX mod packages."
         source = "https://github.com/Alastor-Kaneki/Morphe-Patches"
         author = "Alastor Kaneki"
         contact = "https://github.com/Alastor-Kaneki"
