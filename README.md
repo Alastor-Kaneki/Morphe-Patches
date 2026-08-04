@@ -7,8 +7,9 @@ patches will be added to this project and built together into one `.mpp` bundle.
 
 ### Opera GX — Download GX mods as files
 
-Targets the Android Opera GX package (`com.opera.gx`). It adds an Android share
-target named **Download GX Mod** that saves the GX Store's official raw `.crx`
+Targets the Android Opera GX package (`com.opera.gx`). It adds a visible floating
+**Download Mod** button inside the patched browser and keeps **Download GX Mod**
+as an Android share-sheet fallback. Both save the GX Store's official raw `.crx`
 package to the public **Downloads** folder.
 
 The patch does not install, activate, or modify the downloaded mod.
@@ -19,8 +20,11 @@ The patch does not install, activate, or modify the downloaded mod.
 2. Enable **Download GX mods as files** in Morphe Manager.
 3. Install the patched Opera GX APK.
 4. Open a mod page on `store.gx.me`.
-5. Use Opera GX's **Share** action.
-6. Choose **Download GX Mod**.
+5. Tap the floating **Download Mod ↓** button.
+
+The button attempts to detect the current GX Store URL from Opera's current tab,
+address bar, navigation objects, intent, or clipboard. If Opera does not expose
+the complete URL, it opens a small paste dialog rather than failing silently.
 
 The injected downloader reads the public GX Store page, resolves either a direct
 `mod.crx` URL or a version-matched `/contents/` asset URL, and queues the package
@@ -34,12 +38,12 @@ Only HTTPS package URLs on these official GX hosts are accepted:
 
 The filename is `<mod-slug>-<timestamp>.crx`.
 
-#### Why it uses a share target
+#### Version resilience
 
-Opera GX Mobile is obfuscated and its internal mod-install code can change
-between versions. The patch injects a self-contained Activity and manifest entry
-instead of hooking an unstable internal method, which keeps it comparatively
-version-resilient.
+Opera GX Mobile is heavily obfuscated and its internal menu code changes between
+versions. The patch starts its overlay through an injected Android
+`ContentProvider` rather than hooking a version-specific Opera menu method. The
+share-sheet target remains available as a fallback.
 
 ## Repository structure
 
