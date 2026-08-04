@@ -87,6 +87,51 @@ The overlay is activated through an injected Android `ContentProvider` and scans
 visible labels/resource names for Discord's Appearance and custom-theme screens,
 avoiding version-specific hooks into Discord's obfuscated UI code.
 
+### Discord — Customization and side-by-side clone
+
+The **Discord customization and clone** patch adds both patch-time branding and a
+local in-app customizer.
+
+Patch options:
+
+- **App name** — defaults to `Discord Morphe`.
+- **Package name** — defaults to `com.discord.morphe`, allowing installation next
+  to the official `com.discord` app.
+- **Custom app icon** — accepts a PNG, JPG, JPEG, or WebP image and applies it to
+  the launcher, installer, and Android app settings.
+
+When the package ID is changed, the patch also qualifies relative Android
+component names and rewrites Discord-scoped provider authorities and custom
+permissions to reduce side-by-side installation conflicts.
+
+Inside the patched app, open Discord **Settings → Appearance** and tap
+**Customize ✦**. The native customizer can:
+
+- select a custom image overlay for Discord's UI;
+- control image opacity from 5% to 60%;
+- load a local TTF or OTF font across Discord text views;
+- clear either customization and return to Discord defaults.
+
+The chosen image and font URI remain local to the cloned app. The patch does not
+upload either file or synchronize it through Discord.
+
+### Discord — Restore previous navigation
+
+Discord introduced the mobile **You Bar** in June 2026. The
+**Restore previous Discord navigation** patch covers that bar with classic
+**Servers**, **Messages**, **Notifications**, and **You** controls.
+
+The controller searches Discord's visible labels, accessibility descriptions,
+and resource names, then delegates each classic button to Discord's own existing
+navigation destination. It also recognizes the You Bar when possible and keeps it
+invisible while the classic bar is active. A swipe fallback is used for switching
+between DMs and the current server on builds that expose only the You Bar gesture.
+
+Because Discord's React Native UI is frequently changed and obfuscated, this is a
+version-resilient compatibility overlay rather than a permanent hook into one
+specific Discord build. Unsupported builds display a short message instead of
+silently opening the wrong screen.
+
 ## Repository structure
 
 - `patches/` — Morphe patch definitions.
@@ -133,8 +178,11 @@ workflow artifact.
 - Does not bypass Nitro eligibility or alter account state.
 - Does not call Discord billing or account APIs.
 - Does not save screenshots of Discord screens.
-- Saves only locally generated CSS and PNG files.
-- Writes only to `Downloads/DiscordThemes/`.
+- Saves theme-export CSS and PNG files only under `Downloads/DiscordThemes/`.
+- Keeps selected customization image/font references in private app preferences.
+- Does not upload custom images or fonts.
+- The navigation patch delegates to existing Discord UI controls and does not
+  inspect or store message content.
 
 ## License
 
