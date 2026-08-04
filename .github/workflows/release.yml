@@ -47,9 +47,32 @@ jobs:
             echo 'No .mpp bundle was generated.' >&2
             exit 1
           fi
+
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
               --title "Morphe Patches ${TAG}" \
               --notes "Built Morphe patch bundle for ${TAG}. Includes the Opera GX raw mod downloader patch."
           fi
           gh release upload "$TAG" "${BUNDLES[@]}" --clobber
+
+          BUNDLE="${BUNDLES[0]}"
+          FILE_NAME="$(basename "$BUNDLE")"
+          DIGEST="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+          MARKER_PATH="releases/latest.json"
+          MARKER_CONTENT="$(printf '{\n  \"version\": \"%s\",\n  \"tag\": \"%s\",\n  \"asset\": \"%s\",\n  \"sha256\": \"%s\",\n  \"sourceCommit\": \"%s\"\n}\n' \
+            "$VERSION" "$TAG" "$FILE_NAME" "$DIGEST" "$GITHUB_SHA")"
+          ENCODED_CONTENT="$(printf '%s' "$MARKER_CONTENT" | base64 -w 0)"
+          EXISTING_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${MARKER_PATH}" --jq .sha 2>/dev/null || true)"
+
+          if [[ -n "$EXISTING_SHA" ]]; then
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${MARKER_PATH}" \
+              -f message="Record Morphe release ${TAG}" \
+              -f content="$ENCODED_CONTENT" \
+              -f sha="$EXISTING_SHA" \
+              -f branch="$GITHUB_REF_NAME" >/dev/null
+          else
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${MARKER_PATH}" \
+              -f message="Record Morphe release ${TAG}" \
+              -f content="$ENCODED_CONTENT" \
+              -f branch="$GITHUB_REF_NAME" >/dev/null
+          fi
