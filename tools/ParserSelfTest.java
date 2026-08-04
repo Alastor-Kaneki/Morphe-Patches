@@ -9,6 +9,13 @@ public final class ParserSelfTest {
                 )
         );
 
+        assertEquals(
+                "https://store.gx.me/mods/hma4i0/fundy/",
+                GxModUrlResolver.extractStorePageUrl(
+                        "store.gx.me/mods/hma4i0/fundy/"
+                )
+        );
+
         String direct = "{\"url\":\"https:\\/\\/mods.store.gx.me\\/mods\\/" +
                 "a\\/b\\/c\\/d\\/mod.crx?cache=1\"}";
         assertEquals(
