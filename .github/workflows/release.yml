@@ -50,7 +50,7 @@ jobs:
             exit 1
           fi
 
-          RELEASE_DESCRIPTION="Morphe Patches ${VERSION}. Includes the Opera GX raw mod downloader and Discord Nitro custom-theme CSS/PNG exporter."
+          RELEASE_DESCRIPTION="Morphe Patches ${VERSION}. Includes Opera GX raw mod downloads plus Discord theme export, side-by-side cloning, custom branding/icons, image/font customization, and legacy navigation."
 
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
