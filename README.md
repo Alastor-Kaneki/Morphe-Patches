@@ -1,7 +1,7 @@
 # Morphe Patches
 
 A shared Morphe patch repository maintained by **Alastor Kaneki**. New Morphe
-patches will be added to this project and built together into one `.mpp` bundle.
+patches are added to this project and built together into one `.mpp` bundle.
 
 ## Included patches
 
@@ -50,6 +50,43 @@ versions. The patch starts its overlay through an injected Android
 `ContentProvider` rather than hooking a version-specific Opera menu method. The
 share-sheet target remains available as a fallback.
 
+### Discord — Export Nitro custom themes
+
+Targets the Android Discord package (`com.discord`). It adds a theme-aware
+**Export Theme ↓** button to Discord's Appearance/custom-theme screens.
+
+The patch does not unlock Nitro, modify billing state, or create a separate theme
+system. It exports only the theme Discord already exposes to the signed-in
+account.
+
+#### Usage
+
+1. Patch a full Discord Android APK using the generated `.mpp` bundle.
+2. Enable **Export Nitro custom theme** in Morphe Manager.
+3. Install the patched Discord APK.
+4. Open Discord **Settings → Appearance → Custom Theme** or a custom-theme preview.
+5. Tap **Export Theme ↓**.
+
+Two files are saved under `Downloads/DiscordThemes/`:
+
+- `discord-custom-theme-<timestamp>.css`
+- `discord-custom-theme-<timestamp>.png`
+
+The CSS contains the detected five-color palette, a matching gradient, portable
+custom properties, and commonly used Discord-style color aliases. The PNG is a
+clean generated preview card, not a screenshot of chats or account information.
+
+#### Privacy and compatibility
+
+The exporter briefly samples the visible theme screen in memory to detect colors,
+then discards those pixels. It never writes the captured Discord screen to disk.
+Discord's internal CSS variable names can change, so the exported CSS includes
+portable variables first and compatibility aliases second.
+
+The overlay is activated through an injected Android `ContentProvider` and scans
+visible labels/resource names for Discord's Appearance and custom-theme screens,
+avoiding version-specific hooks into Discord's obfuscated UI code.
+
 ## Repository structure
 
 - `patches/` — Morphe patch definitions.
@@ -90,6 +127,14 @@ workflow artifact.
 - Caps fetched page HTML at 12 MB.
 - Does not read cookies, credentials, browser history, or installed mods.
 - Does not install the downloaded package.
+
+## Discord patch security behavior
+
+- Does not bypass Nitro eligibility or alter account state.
+- Does not call Discord billing or account APIs.
+- Does not save screenshots of Discord screens.
+- Saves only locally generated CSS and PNG files.
+- Writes only to `Downloads/DiscordThemes/`.
 
 ## License
 
