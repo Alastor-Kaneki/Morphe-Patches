@@ -7,15 +7,15 @@ import org.w3c.dom.Element
 
 private const val DOWNLOADER_ACTIVITY =
     "dev.alastorkaneki.morphe.extension.operagx.GxModDownloadActivity"
+private const val OVERLAY_INIT_PROVIDER =
+    "dev.alastorkaneki.morphe.extension.operagx.GxModOverlayInitProvider"
+private const val OVERLAY_PROVIDER_AUTHORITY =
+    "com.opera.gx.gxmoddownloader.init"
 
-/**
- * Adds a dedicated Android share target to the patched Opera GX manifest.
- *
- * User flow: open a GX Store mod page -> Share -> Download GX Mod.
- */
+/** Registers the downloader, visible overlay initializer, and share fallback. */
 @Suppress("unused")
 internal val addGxModDownloaderManifestPatch = resourcePatch(
-    description = "Registers the GX mod-file downloader share target."
+    description = "Registers the visible GX mod downloader button and share fallback."
 ) {
     compatibleWith(OPERA_GX)
 
@@ -44,6 +44,21 @@ internal val addGxModDownloaderManifestPatch = resourcePatch(
                     permission.setAttribute("android:maxSdkVersion", "28")
                     manifest.insertBefore(permission, application)
                 }
+            }
+
+            val providerAlreadyPresent =
+                (0 until application.getElementsByTagName("provider").length)
+                    .map { application.getElementsByTagName("provider").item(it) as Element }
+                    .any { it.getAttribute("android:name") == OVERLAY_INIT_PROVIDER }
+
+            if (!providerAlreadyPresent) {
+                application.appendChild(document.createElement("provider").apply {
+                    setAttribute("android:name", OVERLAY_INIT_PROVIDER)
+                    setAttribute("android:authorities", OVERLAY_PROVIDER_AUTHORITY)
+                    setAttribute("android:exported", "false")
+                    setAttribute("android:enabled", "true")
+                    setAttribute("android:initOrder", "100")
+                })
             }
 
             val activityAlreadyPresent =
@@ -84,14 +99,14 @@ internal val addGxModDownloaderManifestPatch = resourcePatch(
 val downloadGxModsAsFilesPatch = bytecodePatch(
     name = "Download GX mods as files",
     description =
-        "Adds a Share target that resolves a GX Store page to its official mod.crx and saves it in Downloads.",
+        "Adds a visible Download Mod button in Opera GX, with URL auto-detection and a Share fallback.",
     default = true
 ) {
     compatibleWith(OPERA_GX)
     dependsOn(addGxModDownloaderManifestPatch)
     extendWith("extensions/extension.mpe")
 
-    // No Opera method is modified. The injected Activity is intentionally
-    // self-contained to avoid brittle fingerprints against obfuscated builds.
+    // The button is initialized through an injected ContentProvider. This avoids
+    // brittle fingerprints against Opera GX's frequently obfuscated UI classes.
     execute { }
 }
