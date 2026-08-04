@@ -13,6 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -41,3 +42,4 @@ jobs:
             patches/build/libs/*.mpp
             patches/build/libs/*.json
           if-no-files-found: error
+          retention-days: 30
