@@ -12,7 +12,8 @@ public final class GxModUrlResolver {
             "(?:mods\\.store\\.gx\\.me|play\\.gxc\\.gg|play\\.gx\\.games)";
 
     private static final Pattern STORE_PAGE_PATTERN = Pattern.compile(
-            "https?://(?:www\\.)?store\\.gx\\.me/(?:[a-z]{2}(?:-[a-z]{2})?/)?mods/" +
+            "(?:https?://)?(?:www\\.)?store\\.gx\\.me/" +
+                    "(?:[a-z]{2}(?:-[a-z]{2})?/)?mods/" +
                     "[a-z0-9]+/[a-z0-9-]+/?(?:[?#][^\\s<>]*)?",
             Pattern.CASE_INSENSITIVE
     );
@@ -36,8 +37,17 @@ public final class GxModUrlResolver {
         if (sharedText == null) {
             return null;
         }
-        Matcher matcher = STORE_PAGE_PATTERN.matcher(sharedText.trim());
-        return matcher.find() ? trimTrailingPunctuation(matcher.group()) : null;
+        Matcher matcher = STORE_PAGE_PATTERN.matcher(normalizeEscapes(sharedText.trim()));
+        if (!matcher.find()) {
+            return null;
+        }
+
+        String value = trimTrailingPunctuation(matcher.group());
+        if (!value.regionMatches(true, 0, "http://", 0, 7) &&
+                !value.regionMatches(true, 0, "https://", 0, 8)) {
+            value = "https://" + value;
+        }
+        return value;
     }
 
     public static String resolveCrxUrlFromHtml(String html) {
@@ -93,15 +103,12 @@ public final class GxModUrlResolver {
     }
 
     public static String slugFromStoreUrl(String storeUrl) {
-        if (storeUrl == null) {
-            return "gx-mod";
-        }
-        Matcher matcher = STORE_PAGE_PATTERN.matcher(storeUrl);
-        if (!matcher.find()) {
+        String normalizedStoreUrl = extractStorePageUrl(storeUrl);
+        if (normalizedStoreUrl == null) {
             return "gx-mod";
         }
 
-        String clean = matcher.group();
+        String clean = normalizedStoreUrl;
         int query = clean.indexOf('?');
         if (query >= 0) {
             clean = clean.substring(0, query);
@@ -139,7 +146,8 @@ public final class GxModUrlResolver {
         int end = value.length();
         while (end > 0) {
             char c = value.charAt(end - 1);
-            if (c == '.' || c == ',' || c == ')' || c == ']' || c == '}') {
+            if (c == '.' || c == ',' || c == ')' || c == ']' || c == '}' ||
+                    c == '"' || c == '\'') {
                 end--;
             } else {
                 break;
