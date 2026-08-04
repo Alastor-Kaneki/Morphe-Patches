@@ -6,6 +6,7 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.util.TypedValue;
 
 /** Resolves a readable button palette from Opera GX's active Android theme. */
@@ -39,13 +40,15 @@ public final class GxThemePalette {
             surface = decorBackgroundColor(activity);
         }
 
-        boolean nightMode = (activity.getResources().getConfiguration().uiMode
+        boolean systemNightMode = (activity.getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
         if (surface == null) {
-            surface = nightMode ? 0xFF17131F : 0xFFF7F3FA;
+            surface = systemNightMode ? 0xFF17131F : 0xFFF7F3FA;
         }
 
-        boolean dark = luminance(surface) < 0.43 || nightMode;
+        // Prefer the app's actual surface brightness over the device setting because
+        // Opera GX can use its own light/dark theme independently of system night mode.
+        boolean dark = luminance(surface) < 0.43;
 
         Integer accent = firstResolvedColor(
                 activity,
@@ -100,6 +103,7 @@ public final class GxThemePalette {
         return resolveAttributeColor(activity, androidAttr);
     }
 
+    @SuppressWarnings("deprecation")
     private static Integer resolveAttributeColor(Activity activity, int attrId) {
         if (attrId == 0) {
             return null;
@@ -120,14 +124,25 @@ public final class GxThemePalette {
         }
 
         try {
-            ColorStateList list = activity.getResources().getColorStateList(
-                    value.resourceId,
-                    activity.getTheme()
-            );
+            ColorStateList list;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                list = activity.getResources().getColorStateList(
+                        value.resourceId,
+                        activity.getTheme()
+                );
+            } else {
+                list = activity.getResources().getColorStateList(value.resourceId);
+            }
             return list.getDefaultColor();
         } catch (Throwable ignored) {
             try {
-                return activity.getResources().getColor(value.resourceId, activity.getTheme());
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    return activity.getResources().getColor(
+                            value.resourceId,
+                            activity.getTheme()
+                    );
+                }
+                return activity.getResources().getColor(value.resourceId);
             } catch (Throwable ignoredAgain) {
                 return null;
             }
