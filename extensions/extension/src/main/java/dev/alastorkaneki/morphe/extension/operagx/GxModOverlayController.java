@@ -4,9 +4,10 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Application;
 import android.content.Intent;
-import android.graphics.Color;
+import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
@@ -55,7 +56,10 @@ public final class GxModOverlayController implements Application.ActivityLifecyc
 
     private static void attachButton(Activity activity) {
         View decor = activity.getWindow().getDecorView();
-        if (decor.findViewWithTag(BUTTON_TAG) != null) {
+        View existing = decor.findViewWithTag(BUTTON_TAG);
+        if (existing instanceof TextView) {
+            applyButtonTheme(activity, (TextView) existing);
+            existing.bringToFront();
             return;
         }
 
@@ -63,7 +67,6 @@ public final class GxModOverlayController implements Application.ActivityLifecyc
         button.setTag(BUTTON_TAG);
         button.setText("Download Mod  ↓");
         button.setContentDescription("Download the current GX Store mod as a file");
-        button.setTextColor(Color.WHITE);
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         button.setTypeface(Typeface.DEFAULT_BOLD);
         button.setGravity(Gravity.CENTER);
@@ -76,12 +79,7 @@ public final class GxModOverlayController implements Application.ActivityLifecyc
                 dp(activity, 18),
                 dp(activity, 11)
         );
-
-        GradientDrawable background = new GradientDrawable();
-        background.setColor(0xEE17131F);
-        background.setCornerRadius(dp(activity, 28));
-        background.setStroke(dp(activity, 2), 0xFFB05CFF);
-        button.setBackground(background);
+        applyButtonTheme(activity, button);
         button.setOnClickListener(view -> handleDownloadClick(activity));
 
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
@@ -98,6 +96,23 @@ public final class GxModOverlayController implements Application.ActivityLifecyc
 
         activity.addContentView(button, params);
         button.bringToFront();
+    }
+
+    private static void applyButtonTheme(Activity activity, TextView button) {
+        GxThemePalette palette = GxThemePalette.resolve(activity);
+        button.setTextColor(palette.textColor);
+
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(palette.fillColor);
+        shape.setCornerRadius(dp(activity, 28));
+        shape.setStroke(dp(activity, 2), palette.strokeColor);
+
+        RippleDrawable background = new RippleDrawable(
+                ColorStateList.valueOf(palette.rippleColor),
+                shape,
+                null
+        );
+        button.setBackground(background);
     }
 
     private static void detachButton(Activity activity) {
