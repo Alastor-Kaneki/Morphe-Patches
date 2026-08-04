@@ -34,15 +34,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gradle buildAndroid --stacktrace
 
-      - name: Create or update GitHub release
+      - name: Create or update GitHub release and source metadata
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+
           VERSION="$(sed -n 's/^version=//p' gradle.properties | head -n 1)"
           TAG="v${VERSION}"
           mapfile -t BUNDLES < <(find patches/build/libs -maxdepth 1 -type f -name '*.mpp' -print)
+
           if (( ${#BUNDLES[@]} == 0 )); then
             echo 'No .mpp bundle was generated.' >&2
             exit 1
@@ -58,21 +60,54 @@ jobs:
           BUNDLE="${BUNDLES[0]}"
           FILE_NAME="$(basename "$BUNDLE")"
           DIGEST="$(sha256sum "$BUNDLE" | awk '{print $1}')"
-          MARKER_PATH="releases/latest.json"
-          MARKER_CONTENT="$(printf '{\n  \"version\": \"%s\",\n  \"tag\": \"%s\",\n  \"asset\": \"%s\",\n  \"sha256\": \"%s\",\n  \"sourceCommit\": \"%s\"\n}\n' \
-            "$VERSION" "$TAG" "$FILE_NAME" "$DIGEST" "$GITHUB_SHA")"
-          ENCODED_CONTENT="$(printf '%s' "$MARKER_CONTENT" | base64 -w 0)"
-          EXISTING_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${MARKER_PATH}" --jq .sha 2>/dev/null || true)"
+          CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%S)"
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${FILE_NAME}"
 
-          if [[ -n "$EXISTING_SHA" ]]; then
-            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${MARKER_PATH}" \
-              -f message="Record Morphe release ${TAG}" \
-              -f content="$ENCODED_CONTENT" \
-              -f sha="$EXISTING_SHA" \
-              -f branch="$GITHUB_REF_NAME" >/dev/null
-          else
-            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${MARKER_PATH}" \
-              -f message="Record Morphe release ${TAG}" \
-              -f content="$ENCODED_CONTENT" \
-              -f branch="$GITHUB_REF_NAME" >/dev/null
-          fi
+          SOURCE_METADATA="$(jq -n \
+            --arg created_at "$CREATED_AT" \
+            --arg description "Morphe Patches ${VERSION}. Includes the Opera GX raw mod downloader patch." \
+            --arg download_url "$DOWNLOAD_URL" \
+            --arg signature_download_url "" \
+            --arg version "$VERSION" \
+            '{created_at: $created_at, description: $description, download_url: $download_url, signature_download_url: $signature_download_url, version: $version}')"
+
+          RELEASE_MARKER="$(jq -n \
+            --arg version "$VERSION" \
+            --arg tag "$TAG" \
+            --arg asset "$FILE_NAME" \
+            --arg sha256 "$DIGEST" \
+            --arg sourceCommit "$GITHUB_SHA" \
+            '{version: $version, tag: $tag, asset: $asset, sha256: $sha256, sourceCommit: $sourceCommit}')"
+
+          upsert_repo_file() {
+            local path="$1"
+            local content="$2"
+            local message="$3"
+            local encoded existing_sha
+
+            encoded="$(printf '%s\n' "$content" | base64 -w 0)"
+            existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}" --jq .sha 2>/dev/null || true)"
+
+            if [[ -n "$existing_sha" ]]; then
+              gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+                -f message="$message" \
+                -f content="$encoded" \
+                -f sha="$existing_sha" \
+                -f branch="$GITHUB_REF_NAME" >/dev/null
+            else
+              gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+                -f message="$message" \
+                -f content="$encoded" \
+                -f branch="$GITHUB_REF_NAME" >/dev/null
+            fi
+          }
+
+          upsert_repo_file \
+            "patches-bundle.json" \
+            "$SOURCE_METADATA" \
+            "Update Morphe source metadata for ${TAG}"
+
+          upsert_repo_file \
+            "releases/latest.json" \
+            "$RELEASE_MARKER" \
+            "Record Morphe release ${TAG}"
