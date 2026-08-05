@@ -7,59 +7,76 @@ patches are added to this project and built together into one `.mpp` bundle.
 
 ### Opera GX — Download GX mods as files
 
-Targets the Android Opera GX package (`com.opera.gx`). It adds a visible floating
-**Download Mod** button inside the patched browser and keeps **Download GX Mod**
-as an Android share-sheet fallback. Both save the GX Store's official raw `.crx`
-package to the public **Downloads** folder.
+Targets Opera GX Android (`com.opera.gx`). It adds a visible, theme-aware
+**Download Mod** button and an Android share-sheet fallback. Both resolve the GX
+Store's official raw `mod.crx` package and save it to **Downloads** without
+installing or activating it.
 
-The patch does not install, activate, or modify the downloaded mod.
+### Chrome Android — MonkeyScript userscript manager
 
-#### Usage
+Targets Google Chrome Android (`com.android.chrome`). MonkeyScript combines the
+mobile-friendly ideas of Tampermonkey, Violentmonkey, FireMonkey, and
+Greasemonkey in a native manager built into patched Chrome.
 
-1. Patch a full Opera GX Android APK using the generated `.mpp` bundle.
-2. Enable **Download GX mods as files** in Morphe Manager.
-3. Install the patched Opera GX APK.
-4. Open a mod page on `store.gx.me`.
-5. Tap the floating **Download Mod ↓** button.
+#### Manager and editor
 
-The button attempts to detect the current GX Store URL from Opera's current tab,
-address bar, navigation objects, intent, or clipboard. If Opera does not expose
-the complete URL, it opens a small paste dialog rather than failing silently.
+- Floating monkey button with current-page actions.
+- Native searchable dashboard with enable/disable switches and JS/CSS badges.
+- Full source editor with parsed-metadata inspection and URL-match testing.
+- Install from `.user.js`, JavaScript, CSS, clipboard text, or a direct URL.
+- Create JavaScript userscripts and CSS userstyles from templates.
+- Check `@updateURL` / `@downloadURL` sources for updates.
+- Import/export individual scripts and JSON backups of the complete library.
+- Global pause, per-site disable rules, floating-button control, and AMOLED UI.
 
-The floating button follows Opera GX's active theme at runtime. It reads the
-app's surface, primary/accent, and foreground colors and automatically chooses
-readable text, border, and ripple colors.
+#### Metadata compatibility
 
-The injected downloader reads the public GX Store page, resolves either a direct
-`mod.crx` URL or a version-matched `/contents/` asset URL, and queues the package
-through Android Download Manager.
+MonkeyScript parses the standard monkey metadata block, including:
 
-Only HTTPS package URLs on these official GX hosts are accepted:
+- `@name`, `@namespace`, `@version`, `@description`, and `@author`
+- `@match`, `@include`, `@exclude`, and `@exclude-match`
+- `@run-at`, `@noframes`, `@grant`, `@require`, and `@resource`
+- `@updateURL`, `@downloadURL`, `@icon`, and tags
 
-- `mods.store.gx.me`
-- `play.gxc.gg`
-- `play.gx.games`
+Chrome match patterns, wildcard globs, regular-expression includes, and
+`<all_urls>` are supported for HTTP/HTTPS pages.
 
-The filename is `<mod-slug>-<timestamp>.crx`.
+#### Runtime and GM compatibility
 
-#### Version resilience
+Matching scripts are injected into the active Chromium `WebContents`. The
+compatibility layer supplies commonly used APIs such as:
 
-Opera GX Mobile is heavily obfuscated and its internal menu code changes between
-versions. The patch starts its overlay through an injected Android
-`ContentProvider` rather than hooking a version-specific Opera menu method. The
-share-sheet target remains available as a fallback.
+- `GM_info` and `GM.info`
+- `GM_getValue`, `GM_setValue`, `GM_deleteValue`, and `GM_listValues`
+- Promise-style `GM.getValue`, `GM.setValue`, `GM.deleteValue`, and `GM.listValues`
+- `GM_addStyle`, `GM_log`, and their `GM.*` counterparts
+- `GM_registerMenuCommand`, `GM_openInTab`, clipboard, notification, and download
+- A best-effort `GM_xmlhttpRequest`
+- `unsafeWindow`
 
-## Repository structure
+`@require` dependencies are fetched and cached when installing or updating a
+script. CSS userstyles are injected directly into matching pages.
 
-- `patches/` — Morphe patch definitions.
-- `extensions/extension/` — Android code injected by patches.
-- `tools/` — local tests and validation helpers.
-- `.github/workflows/build.yml` — builds the shared `.mpp` bundle.
+#### Important limitations
 
-Future patches should receive their own package under
-`patches/src/main/kotlin/dev/alastorkaneki/morphe/patches/` and, when needed,
-their injected code under
-`extensions/extension/src/main/java/dev/alastorkaneki/morphe/extension/`.
+MonkeyScript is a userscript engine, not Chrome's desktop extension runtime.
+Chrome extension service workers, `chrome.tabs`, extension popups, native
+messaging, and other desktop extension APIs are not provided.
+
+The patch discovers Chrome's active Chromium `Tab` and `WebContents` at runtime
+instead of fingerprinting one obfuscated Chrome release. This is more
+version-resilient but still needs runtime testing on each Chrome build.
+`document-start` is best effort, `GM_xmlhttpRequest` uses page networking and can
+be affected by CORS, and script value storage is scoped by script and page origin.
+Scripts are deliberately not injected in Incognito.
+
+#### Security behavior
+
+Userscripts execute code in pages you visit. Install only scripts you trust.
+MonkeyScript stores its database and cached dependencies in the patched app's
+private storage. It does not upload the script library, browser history,
+credentials, or page contents. Raw scripts without explicit match rules are
+disabled until reviewed.
 
 ## Build
 
@@ -69,26 +86,23 @@ Requirements:
 - Gradle 9.6.1
 - GitHub credentials with read access to Morphe's GitHub Packages registry
 
-Set either Gradle properties `gpr.user` / `gpr.key`, or environment variables
-`GITHUB_ACTOR` / `GITHUB_TOKEN`, then run:
+Run:
 
 ```bash
 bash tools/test-parser.sh
+bash tools/test-chrome-userscripts.sh
 gradle buildAndroid --stacktrace
 ```
 
 The bundle is generated under `patches/build/libs/` as an `.mpp`. Every push to
-`main` also runs the included GitHub Actions workflow and uploads the bundle as a
-workflow artifact.
+`main` also runs GitHub Actions and uploads the bundle as a workflow artifact.
 
-## Opera GX patch security behavior
+## Repository structure
 
-- Accepts only a GX Store mod page or an already-direct official GX CDN
-  `mod.crx` URL.
-- Refuses arbitrary download hosts.
-- Caps fetched page HTML at 12 MB.
-- Does not read cookies, credentials, browser history, or installed mods.
-- Does not install the downloaded package.
+- `patches/` — Morphe patch definitions.
+- `extensions/extension/` — Android code injected by patches.
+- `tools/` — local parser, matcher, and payload tests.
+- `.github/workflows/` — CI and controlled GitHub Release publishing.
 
 ## License
 
