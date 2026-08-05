@@ -46,9 +46,7 @@ final class ChromeAppMenuIntegrator implements Runnable {
         if (activity.isFinishing() || activity.isDestroyed()) return;
         try {
             String url = MonkeyRuntime.url(activity);
-            for (View root : windowRoots(activity)) {
-                bindRows(root, url);
-            }
+            for (View root : windowRoots(activity)) bindRows(root, url);
         } catch (Throwable ignored) { }
         MAIN.postDelayed(this, 120);
     }
@@ -60,12 +58,12 @@ final class ChromeAppMenuIntegrator implements Runnable {
             CharSequence text = label.getText();
             if (text == null) continue;
             String value = text.toString().trim();
-            if ("MonkeyScript".equals(value)) bindManager(rowFor(label), url);
+            if ("MonkeyScript".equals(value)) bindManager(rowFor(label));
             if ("Install userscript".equals(value)) bindInstall(rowFor(label), url);
         }
     }
 
-    private void bindManager(View row, String url) {
+    private void bindManager(View row) {
         if (row == null) return;
         row.setVisibility(View.VISIBLE);
         synchronized (BOUND_MANAGER) {
@@ -143,7 +141,13 @@ final class ChromeAppMenuIntegrator implements Runnable {
                 Method getRootViews = type.getDeclaredMethod("getRootViews");
                 getRootViews.setAccessible(true);
                 Object value = getRootViews.invoke(global);
-                if (value instanceof View[]) Collections.addAll(roots, (View[]) value);
+                if (value instanceof View[]) {
+                    Collections.addAll(roots, (View[]) value);
+                } else if (value instanceof Iterable) {
+                    for (Object item : (Iterable<?>) value) {
+                        if (item instanceof View) roots.add((View) item);
+                    }
+                }
             } catch (Throwable ignored) {
                 Field field = type.getDeclaredField("mRoots");
                 field.setAccessible(true);
