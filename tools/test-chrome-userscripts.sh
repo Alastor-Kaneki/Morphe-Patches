@@ -49,6 +49,7 @@ JAVA
 javac -d "$OUT/classes" \
   "$STUB/Userscript.java" \
   "$ROOT/extensions/extension/src/main/java/dev/alastorkaneki/morphe/extension/chromeuserscripts/UserscriptMetadataParser.java" \
+  "$ROOT/extensions/extension/src/main/java/dev/alastorkaneki/morphe/extension/chromeuserscripts/ViolentmonkeyCompat.java" \
   "$ROOT/extensions/extension/src/main/java/dev/alastorkaneki/morphe/extension/chromeuserscripts/UrlPatternMatcher.java" \
   "$ROOT/extensions/extension/src/main/java/dev/alastorkaneki/morphe/extension/chromeuserscripts/ScriptInjector.java" \
   "$ROOT/tools/ChromeUserscriptSelfTest.java"

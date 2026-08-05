@@ -7,7 +7,10 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Parses Greasemonkey/Tampermonkey/Violentmonkey/FireMonkey metadata blocks. */
+/**
+ * Parses Greasemonkey-compatible metadata using behavior adapted from Violentmonkey's
+ * MIT-licensed parseMeta implementation.
+ */
 public final class UserscriptMetadataParser {
     private static final Pattern SCRIPT_BLOCK = Pattern.compile(
             "(?s)//\\s*==UserScript==\\s*(.*?)//\\s*==/UserScript=="
@@ -16,11 +19,10 @@ public final class UserscriptMetadataParser {
             "(?s)/\\*\\s*==UserStyle==\\s*(.*?)==/UserStyle==\\s*\\*/"
     );
     private static final Pattern METADATA_LINE = Pattern.compile(
-            "^\\s*(?://|\\*)\\s*@([A-Za-z0-9_.:-]+)(?:\\s+(.*?))?\\s*$"
+            "^\\s*(?://|\\*)\\s*@([^\\s]+)(?:[\\t ]+(.*?))?[\\t ]*$"
     );
 
-    private UserscriptMetadataParser() {
-    }
+    private UserscriptMetadataParser() { }
 
     public static Userscript parse(String source, String fileName, String installUrl) {
         if (source == null) source = "";
@@ -40,13 +42,12 @@ public final class UserscriptMetadataParser {
             metadata = style.group(1);
             result.kind = Userscript.KIND_CSS;
             hasMetadata = true;
-        } else if (fileName != null && fileName.toLowerCase(Locale.US).endsWith(".css")) {
+        } else if (fileName != null
+                && fileName.toLowerCase(Locale.US).endsWith(".css")) {
             result.kind = Userscript.KIND_CSS;
         }
 
-        if (hasMetadata) {
-            parseLines(metadata, result);
-        }
+        if (hasMetadata) parseLines(metadata, result);
 
         if (isBlank(result.name) || "Untitled userscript".equals(result.name)) {
             result.name = fileNameToName(fileName, result.kind);
@@ -54,8 +55,8 @@ public final class UserscriptMetadataParser {
         if (isBlank(result.version)) result.version = "1.0.0";
         if (isBlank(result.runAt)) result.runAt = "document-end";
         if (isBlank(result.injectInto)) result.injectInto = "page";
-        if (result.matches.isEmpty() && result.includes.isEmpty()) {
-            // A script without explicit rules stays safe by default until the user edits it.
+        if (!hasMetadata || result.matches.isEmpty() && result.includes.isEmpty()) {
+            // Violentmonkey also requires valid metadata before taking over a downloaded script.
             result.enabled = false;
         }
 
@@ -67,8 +68,9 @@ public final class UserscriptMetadataParser {
     public static Userscript reparsePreservingState(Userscript previous, String source) {
         Userscript parsed = parse(
                 source,
-                previous.kind.equals(Userscript.KIND_CSS) ? previous.name + ".css" :
-                        previous.name + ".user.js",
+                Userscript.KIND_CSS.equals(previous.kind)
+                        ? previous.name + ".user.css"
+                        : previous.name + ".user.js",
                 previous.installUrl
         );
         parsed.id = previous.id;
@@ -79,15 +81,26 @@ public final class UserscriptMetadataParser {
     }
 
     private static void parseLines(String metadata, Userscript target) {
+        String localizedName = "";
+        String localizedDescription = "";
         String[] lines = metadata.replace("\r", "").split("\n");
         for (String line : lines) {
             Matcher matcher = METADATA_LINE.matcher(line);
             if (!matcher.matches()) continue;
-            String key = matcher.group(1).toLowerCase(Locale.US);
+
+            String rawKey = matcher.group(1);
             String value = matcher.group(2) == null ? "" : matcher.group(2).trim();
+            String[] localeParts = rawKey.split(":", 2);
+            String key = normalizeKey(localeParts[0]);
+            boolean localized = localeParts.length == 2;
+
             switch (key) {
                 case "name":
-                    if (!value.isEmpty()) target.name = value;
+                    if (localized) {
+                        if (localizedName.isEmpty() && !value.isEmpty()) localizedName = value;
+                    } else if (!value.isEmpty()) {
+                        target.name = value;
+                    }
                     break;
                 case "namespace":
                     target.namespace = value;
@@ -96,7 +109,13 @@ public final class UserscriptMetadataParser {
                     if (!value.isEmpty()) target.version = value;
                     break;
                 case "description":
-                    target.description = value;
+                    if (localized) {
+                        if (localizedDescription.isEmpty() && !value.isEmpty()) {
+                            localizedDescription = value;
+                        }
+                    } else {
+                        target.description = value;
+                    }
                     break;
                 case "author":
                     target.author = value;
@@ -115,7 +134,7 @@ public final class UserscriptMetadataParser {
                 case "exclude":
                     add(value, target.excludes);
                     break;
-                case "exclude-match":
+                case "excludematch":
                     add(value, target.excludeMatches);
                     break;
                 case "grant":
@@ -130,18 +149,25 @@ public final class UserscriptMetadataParser {
                 case "tag":
                     add(value, target.tags);
                     break;
-                case "run-at":
+                case "connect":
+                    add("connect:" + value, target.tags);
+                    break;
+                case "antifeature":
+                    add("antifeature:" + value, target.tags);
+                    break;
+                case "compatible":
+                    add("compatible:" + value, target.tags);
+                    break;
+                case "runat":
                     target.runAt = normalizeRunAt(value);
                     break;
-                case "inject-into":
+                case "injectinto":
                     target.injectInto = value.isEmpty() ? "page" : value;
                     break;
                 case "updateurl":
-                case "update-url":
                     target.updateUrl = value;
                     break;
                 case "downloadurl":
-                case "download-url":
                     target.downloadUrl = value;
                     break;
                 case "noframes":
@@ -151,26 +177,40 @@ public final class UserscriptMetadataParser {
                     break;
             }
         }
+
+        if ((isBlank(target.name) || "Untitled userscript".equals(target.name))
+                && !localizedName.isEmpty()) {
+            target.name = localizedName;
+        }
+        if (isBlank(target.description) && !localizedDescription.isEmpty()) {
+            target.description = localizedDescription;
+        }
+    }
+
+    private static String normalizeKey(String value) {
+        return value.toLowerCase(Locale.US).replace("-", "").replace("_", "");
     }
 
     private static String normalizeRunAt(String value) {
         String normalized = value.toLowerCase(Locale.US);
-        if ("document-start".equals(normalized) ||
-                "document-body".equals(normalized) ||
-                "document-end".equals(normalized) ||
-                "document-idle".equals(normalized)) {
+        if ("document-start".equals(normalized)
+                || "document-body".equals(normalized)
+                || "document-end".equals(normalized)
+                || "document-idle".equals(normalized)) {
             return normalized;
         }
         return "document-end";
     }
 
     private static void add(String value, java.util.List<String> output) {
-        if (!value.isEmpty()) output.add(value);
+        if (value != null && !value.isEmpty()) output.add(value);
     }
 
     private static String fileNameToName(String fileName, String kind) {
         if (fileName == null || fileName.trim().isEmpty()) {
-            return Userscript.KIND_CSS.equals(kind) ? "Untitled userstyle" : "Untitled userscript";
+            return Userscript.KIND_CSS.equals(kind)
+                    ? "Untitled userstyle"
+                    : "Untitled userscript";
         }
         String value = fileName.trim();
         value = value.replaceFirst("(?i)\\.user\\.js$", "");
@@ -178,13 +218,17 @@ public final class UserscriptMetadataParser {
         value = value.replaceFirst("(?i)\\.(js|css)$", "");
         value = value.replace('_', ' ').replace('-', ' ').trim();
         if (value.isEmpty()) {
-            return Userscript.KIND_CSS.equals(kind) ? "Untitled userstyle" : "Untitled userscript";
+            return Userscript.KIND_CSS.equals(kind)
+                    ? "Untitled userstyle"
+                    : "Untitled userscript";
         }
         return value;
     }
 
     public static String stableId(String namespace, String name) {
-        String seed = (namespace == null ? "" : namespace) + "\n" + (name == null ? "" : name);
+        String seed = (namespace == null ? "" : namespace)
+                + "\n"
+                + (name == null ? "" : name);
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] bytes = digest.digest(seed.getBytes(StandardCharsets.UTF_8));
