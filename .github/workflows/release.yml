@@ -53,7 +53,7 @@ jobs:
             exit 1
           fi
 
-          RELEASE_DESCRIPTION="Morphe Patches ${VERSION}. Includes the Opera GX raw mod downloader and the cloneable MonkeyScript userscript/userstyle manager for Chrome Android with configurable app and package renaming."
+          RELEASE_DESCRIPTION="Morphe Patches ${VERSION}. Includes the Opera GX raw mod downloader and the cloneable MonkeyScript manager embedded in Chrome's app menu with Greasy Fork/Sleazy Fork browsing, installation, and userscript publishing."
 
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
