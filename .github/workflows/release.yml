@@ -28,6 +28,9 @@ jobs:
       - name: Test GX URL resolver
         run: bash tools/test-parser.sh
 
+      - name: Test Chrome userscript engine
+        run: bash tools/test-chrome-userscripts.sh
+
       - name: Build Android Morphe bundle
         env:
           GITHUB_ACTOR: ${{ github.actor }}
@@ -50,7 +53,7 @@ jobs:
             exit 1
           fi
 
-          RELEASE_DESCRIPTION="Morphe Patches ${VERSION}. Opera GX raw mod downloader only; all Discord patches have been removed."
+          RELEASE_DESCRIPTION="Morphe Patches ${VERSION}. Includes the Opera GX raw mod downloader and MonkeyScript userscript/userstyle manager for Chrome Android."
 
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
