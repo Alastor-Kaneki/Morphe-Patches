@@ -1,23 +1,23 @@
 package dev.alastorkaneki.morphe.extension.chromeuserscripts;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
-import android.content.res.Resources;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.text.TextUtils;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
-import android.view.Window;
+import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.widget.AdapterView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
-import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -27,25 +27,33 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Adds MonkeyScript to Chrome's real Android app-menu model.
+ * Embeds MonkeyScript in Chrome's actual Chromium app-menu view.
  *
- * This class never scans WindowManager windows or mutates popup/context-menu views. It first uses
- * known AppMenuHandler access paths, then performs a bounded object-graph search from the Chrome
- * Activity. A Menu is changed only after it matches a Chrome app-menu signature such as Settings,
- * History, Downloads, Bookmarks, or their stable resource-entry names. This keeps text, link,
- * image, and selection context menus untouched.
+ * Chrome 150 renders its overflow menu from a Chromium ModelList inside the view whose resource
+ * entry name is app_menu_list. It is not an android.view.Menu. The earlier Menu reflection bridge
+ * therefore could never find it. This implementation only modifies a visible root containing the
+ * exact app_menu_list resource and explicitly rejects roots containing context_menu_list_view.
  */
 final class ChromeAppMenuIntegrator implements Runnable {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final Map<Activity, ChromeAppMenuIntegrator> ACTIVE = new WeakHashMap<>();
 
-    private static final int MANAGER_ID = 0x4D530101;
-    private static final int INSTALL_ID = 0x4D530102;
-    private static final int ORDER_MANAGER = 0x6FFF0000;
-    private static final int ORDER_INSTALL = 0x6FFF0001;
+    private static final String APP_MENU_LIST = "app_menu_list";
+    private static final String CONTEXT_MENU_LIST = "context_menu_list_view";
+    private static final String FOOTER_TAG =
+            "dev.alastorkaneki.monkeyscript.CHROME_APP_MENU_FOOTER";
+    private static final String MANAGER_TAG =
+            "dev.alastorkaneki.monkeyscript.CHROME_APP_MENU_MANAGER";
+    private static final String INSTALL_TAG =
+            "dev.alastorkaneki.monkeyscript.CHROME_APP_MENU_INSTALL";
+
+    // Resource IDs observed in the supplied Chrome 150.0.7871.186 APK. They are used only after
+    // validating the resource entry name, so a different Chrome build cannot be modified by ID
+    // collision alone.
+    private static final int CHROME_150_APP_MENU_LIST_ID = 0x7f01011a;
+    private static final int CHROME_150_CONTEXT_MENU_LIST_ID = 0x7f010318;
 
     private final Activity activity;
-    private Menu lastMenu;
 
     private ChromeAppMenuIntegrator(Activity activity) {
         this.activity = activity;
@@ -71,290 +79,327 @@ final class ChromeAppMenuIntegrator implements Runnable {
     @Override public void run() {
         if (activity.isFinishing() || activity.isDestroyed()) return;
         try {
-            Menu menu = findChromeAppMenu();
-            if (menu != null) {
-                lastMenu = menu;
-                bind(menu, MonkeyRuntime.url(activity));
-            } else if (lastMenu != null && isChromeAppMenu(lastMenu)) {
-                bind(lastMenu, MonkeyRuntime.url(activity));
+            String url = MonkeyRuntime.url(activity);
+            for (View root : windowRoots(activity)) {
+                bindExactChromeMenu(root, url);
             }
-        } catch (Throwable ignored) {
-            lastMenu = null;
-        }
-        MAIN.postDelayed(this, 250);
+        } catch (Throwable ignored) { }
+        MAIN.postDelayed(this, 100);
     }
 
-    private void bind(Menu menu, String url) {
-        MenuItem manager = findByIdOrTitle(menu, MANAGER_ID, "Userscripts");
-        if (manager == null) {
-            manager = menu.add(Menu.NONE, MANAGER_ID, ORDER_MANAGER, "Userscripts");
-        }
-        Intent managerIntent = new Intent(activity, UserscriptManagerActivity.class)
-                .putExtra("current_url", url)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        manager.setVisible(true);
-        manager.setEnabled(true);
-        manager.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        manager.setIntent(managerIntent);
-        try { manager.setIcon(android.R.drawable.ic_menu_manage); } catch (Throwable ignored) { }
-        manager.setOnMenuItemClickListener(item -> {
-            activity.startActivity(new Intent(managerIntent));
-            return true;
-        });
+    private void bindExactChromeMenu(View root, String url) {
+        if (root == null || !root.isShown()) return;
 
-        String marked = ForkSiteSupport.installUrlFromMarker(url);
-        String target = marked == null ? url : marked;
+        // Chrome's long-press and page context menus use this different exact resource. Never
+        // inspect or mutate such a window, even if its hierarchy happens to resemble the app menu.
+        if (containsResource(root, CONTEXT_MENU_LIST, CHROME_150_CONTEXT_MENU_LIST_ID)) return;
+
+        View appMenuList = findResource(root, APP_MENU_LIST, CHROME_150_APP_MENU_LIST_ID);
+        if (!(appMenuList instanceof ViewGroup)
+                || !appMenuList.isShown()
+                || appMenuList.getWidth() <= 0
+                || appMenuList.getHeight() <= 0) return;
+
+        ViewParent parent = appMenuList.getParent();
+        if (!(parent instanceof ViewGroup)) return;
+        ViewGroup host = (ViewGroup) parent;
+        if (host instanceof AdapterView) return;
+
+        View existing = host.findViewWithTag(FOOTER_TAG);
+        if (existing instanceof ViewGroup) {
+            updateRows((ViewGroup) existing, url);
+            return;
+        }
+
+        TextView exemplar = findNativeText((ViewGroup) appMenuList);
+        View nativeRow = exemplar == null ? null : rowForList(exemplar, appMenuList);
+        int rowHeight = nativeRowHeight(nativeRow);
+
+        LinearLayout footer = new LinearLayout(activity);
+        footer.setTag(FOOTER_TAG);
+        footer.setOrientation(LinearLayout.VERTICAL);
+        footer.setClipToPadding(false);
+        footer.setClickable(false);
+        footer.setFocusable(false);
+
+        TextView manager = createRow(exemplar, nativeRow, "Userscripts", MANAGER_TAG, rowHeight);
+        footer.addView(manager, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                rowHeight
+        ));
+
+        TextView install = createRow(
+                exemplar,
+                nativeRow,
+                "Install userscript",
+                INSTALL_TAG,
+                rowHeight
+        );
+        footer.addView(install, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                rowHeight
+        ));
+
+        int insertionIndex = Math.min(host.indexOfChild(appMenuList) + 1, host.getChildCount());
+        host.addView(
+                footer,
+                insertionIndex,
+                new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+        );
+        updateRows(footer, url);
+        footer.requestLayout();
+        host.requestLayout();
+    }
+
+    private void updateRows(ViewGroup footer, String url) {
+        View manager = footer.findViewWithTag(MANAGER_TAG);
+        if (manager != null) {
+            manager.setVisibility(View.VISIBLE);
+            manager.setEnabled(true);
+            manager.setOnClickListener(view -> activity.startActivity(
+                    new Intent(activity, UserscriptManagerActivity.class)
+                            .putExtra("current_url", MonkeyRuntime.url(activity))
+                            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            ));
+        }
+
+        String current = url == null ? "" : url;
+        String marked = ForkSiteSupport.installUrlFromMarker(current);
+        String target = marked == null ? current : marked;
         boolean installable = ForkSiteSupport.isInstallablePage(target);
-        MenuItem install = findByIdOrTitle(menu, INSTALL_ID, "Install userscript");
-        if (install == null) {
-            install = menu.add(Menu.NONE, INSTALL_ID, ORDER_INSTALL, "Install userscript");
+        View install = footer.findViewWithTag(INSTALL_TAG);
+        if (install != null) {
+            install.setVisibility(installable ? View.VISIBLE : View.GONE);
+            install.setEnabled(installable);
+            install.setOnClickListener(installable ? view ->
+                    ForkSiteSupport.openInstallPreview(activity, target) : null);
         }
-        Intent installIntent = new Intent(activity, UserscriptInstallActivity.class)
-                .putExtra("script_page_url", target)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        install.setVisible(installable);
-        install.setEnabled(installable);
-        install.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        install.setIntent(installIntent);
-        try { install.setIcon(android.R.drawable.stat_sys_download_done); } catch (Throwable ignored) { }
-        install.setOnMenuItemClickListener(item -> {
-            if (!ForkSiteSupport.isInstallablePage(target)) return false;
-            activity.startActivity(new Intent(installIntent));
-            return true;
-        });
     }
 
-    private Menu findChromeAppMenu() {
-        Object handler = callNoArgs(activity, "getAppMenuHandler");
-        Menu menu = findValidatedMenu(handler, 6, 220);
-        if (menu != null) return menu;
+    private TextView createRow(
+            TextView exemplar,
+            View nativeRow,
+            String title,
+            String tag,
+            int rowHeight
+    ) {
+        TextView row = new TextView(activity);
+        row.setTag(tag);
+        row.setText(title);
+        row.setContentDescription(title);
+        row.setSingleLine(true);
+        row.setEllipsize(TextUtils.TruncateAt.END);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setMinHeight(rowHeight);
 
-        // Some Chrome channels rename the getter but keep an AppMenu-typed field or method.
-        for (Method method : allMethods(activity.getClass())) {
-            if (method.getParameterTypes().length != 0) continue;
-            String methodName = method.getName().toLowerCase(Locale.US);
-            String typeName = method.getReturnType().getName().toLowerCase(Locale.US);
-            if (!methodName.contains("appmenu") && !typeName.contains("appmenu")) continue;
-            try {
-                method.setAccessible(true);
-                menu = findValidatedMenu(method.invoke(activity), 6, 220);
-                if (menu != null) return menu;
-            } catch (Throwable ignored) { }
+        if (exemplar != null) {
+            row.setTextColor(exemplar.getTextColors());
+            row.setTextSize(TypedValue.COMPLEX_UNIT_PX, exemplar.getTextSize());
+            Typeface typeface = exemplar.getTypeface();
+            if (typeface != null) row.setTypeface(typeface);
+            row.setIncludeFontPadding(exemplar.getIncludeFontPadding());
+            row.setLetterSpacing(exemplar.getLetterSpacing());
+            row.setGravity(exemplar.getGravity());
+            row.setCompoundDrawablePadding(exemplar.getCompoundDrawablePadding());
+            int start = Math.max(relativeStart(exemplar, nativeRow), dp(20));
+            int end = Math.max(exemplar.getPaddingEnd(), dp(20));
+            row.setPaddingRelative(start, exemplar.getPaddingTop(), end, exemplar.getPaddingBottom());
+        } else {
+            row.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            row.setTextColor(MonkeyUi.text(activity));
+            row.setPaddingRelative(dp(20), 0, dp(20), 0);
         }
 
-        for (Field field : allFields(activity.getClass())) {
-            String fieldName = field.getName().toLowerCase(Locale.US);
-            String typeName = field.getType().getName().toLowerCase(Locale.US);
-            if (!fieldName.contains("appmenu") && !typeName.contains("appmenu")) continue;
-            try {
-                field.setAccessible(true);
-                menu = findValidatedMenu(field.get(activity), 6, 220);
-                if (menu != null) return menu;
-            } catch (Throwable ignored) { }
+        Drawable background = cloneBackground(nativeRow);
+        if (background != null) {
+            row.setBackground(background);
+        } else {
+            TypedValue selectable = new TypedValue();
+            if (activity.getTheme().resolveAttribute(
+                    android.R.attr.selectableItemBackground,
+                    selectable,
+                    true
+            ) && selectable.resourceId != 0) {
+                row.setBackgroundResource(selectable.resourceId);
+            }
         }
-
-        // Release builds may obfuscate every AppMenu name. Search the Activity's non-view object
-        // graph, but only accept a Menu with a Chrome app-menu signature.
-        return findValidatedMenu(activity, 7, 520);
+        return row;
     }
 
-    private Menu findValidatedMenu(Object start, int maxDepth, int maxVisited) {
-        if (start == null) return null;
-        ArrayDeque<Node> queue = new ArrayDeque<>();
-        IdentityHashMap<Object, Boolean> seen = new IdentityHashMap<>();
-        queue.add(new Node(start, 0));
-        int visited = 0;
+    private Drawable cloneBackground(View nativeRow) {
+        if (nativeRow == null || nativeRow.getBackground() == null) return null;
+        try {
+            Drawable.ConstantState state = nativeRow.getBackground().getConstantState();
+            if (state == null) return null;
+            return state.newDrawable(activity.getResources(), activity.getTheme()).mutate();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
 
-        while (!queue.isEmpty() && visited++ < maxVisited) {
-            Node node = queue.removeFirst();
-            Object value = node.value;
-            if (value == null || seen.put(value, true) != null) continue;
-            if (value instanceof Menu && isChromeAppMenu((Menu) value)) return (Menu) value;
+    private int relativeStart(TextView text, View row) {
+        int start = text.getPaddingStart();
+        View current = text;
+        for (int depth = 0; depth < 8 && current != null && current != row; depth++) {
+            start += current.getLeft();
+            ViewParent parent = current.getParent();
+            current = parent instanceof View ? (View) parent : null;
+        }
+        return start;
+    }
 
-            for (Method method : allMethods(value.getClass())) {
-                if (method.getParameterTypes().length != 0
-                        || !Menu.class.isAssignableFrom(method.getReturnType())) continue;
-                try {
-                    method.setAccessible(true);
-                    Object result = method.invoke(value);
-                    if (result instanceof Menu && isChromeAppMenu((Menu) result)) {
-                        return (Menu) result;
-                    }
-                } catch (Throwable ignored) { }
+    private int nativeRowHeight(View row) {
+        if (row != null) {
+            int height = row.getHeight();
+            if (height >= dp(40) && height <= dp(96)) return height;
+            int minimum = row.getMinimumHeight();
+            if (minimum >= dp(40) && minimum <= dp(96)) return minimum;
+            ViewGroup.LayoutParams params = row.getLayoutParams();
+            if (params != null && params.height >= dp(40) && params.height <= dp(96)) {
+                return params.height;
             }
+        }
+        return dp(48);
+    }
 
-            if (node.depth >= maxDepth) continue;
-            enqueueContainer(value, node.depth, queue);
-            for (Field field : allFields(value.getClass())) {
-                if (Modifier.isStatic(field.getModifiers()) || field.getType().isPrimitive()) continue;
-                try {
-                    field.setAccessible(true);
-                    Object child = field.get(value);
-                    if (child instanceof Menu && isChromeAppMenu((Menu) child)) {
-                        return (Menu) child;
-                    }
-                    if (shouldTraverse(child)) queue.addLast(new Node(child, node.depth + 1));
-                } catch (Throwable ignored) { }
-            }
+    private TextView findNativeText(ViewGroup list) {
+        for (int index = 0; index < list.getChildCount(); index++) {
+            TextView found = findFirstText(list.getChildAt(index), 0);
+            if (found != null && found.getText() != null
+                    && !found.getText().toString().trim().isEmpty()) return found;
         }
         return null;
     }
 
-    private void enqueueContainer(Object value, int depth, ArrayDeque<Node> queue) {
-        if (value == null) return;
-        Class<?> type = value.getClass();
-        if (type.isArray() && !type.getComponentType().isPrimitive()) {
-            int length = Math.min(Array.getLength(value), 40);
-            for (int index = 0; index < length; index++) {
-                Object child = Array.get(value, index);
-                if (shouldTraverse(child)) queue.addLast(new Node(child, depth + 1));
-            }
-        } else if (value instanceof Iterable) {
-            int count = 0;
-            for (Object child : (Iterable<?>) value) {
-                if (count++ >= 40) break;
-                if (shouldTraverse(child)) queue.addLast(new Node(child, depth + 1));
-            }
-        } else if (value instanceof Map) {
-            int count = 0;
-            for (Object child : ((Map<?, ?>) value).values()) {
-                if (count++ >= 40) break;
-                if (shouldTraverse(child)) queue.addLast(new Node(child, depth + 1));
-            }
+    private TextView findFirstText(View view, int depth) {
+        if (view == null || depth > 10) return null;
+        if (view instanceof TextView) return (TextView) view;
+        if (!(view instanceof ViewGroup)) return null;
+        ViewGroup group = (ViewGroup) view;
+        for (int index = 0; index < group.getChildCount(); index++) {
+            TextView found = findFirstText(group.getChildAt(index), depth + 1);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private View rowForList(TextView text, View list) {
+        View current = text;
+        View previous = text;
+        for (int depth = 0; depth < 10 && current != null && current != list; depth++) {
+            previous = current;
+            ViewParent parent = current.getParent();
+            current = parent instanceof View ? (View) parent : null;
+        }
+        return current == list ? previous : text;
+    }
+
+    private boolean containsResource(View root, String entryName, int exactId) {
+        return findResource(root, entryName, exactId) != null;
+    }
+
+    private View findResource(View root, String entryName, int exactId) {
+        int[] ids = {
+                resourceId(entryName, activity.getPackageName()),
+                resourceId(entryName, "com.android.chrome"),
+                exactId
+        };
+        for (int id : ids) {
+            if (id == 0) continue;
+            View candidate = root.findViewById(id);
+            if (candidate != null && hasEntryName(candidate, entryName)) return candidate;
+        }
+        return findResourceRecursively(root, entryName, 0);
+    }
+
+    private int resourceId(String entryName, String packageName) {
+        try {
+            return activity.getResources().getIdentifier(entryName, "id", packageName);
+        } catch (Throwable ignored) {
+            return 0;
         }
     }
 
-    private boolean shouldTraverse(Object value) {
-        if (value == null
-                || value instanceof String
-                || value instanceof Number
-                || value instanceof Boolean
-                || value instanceof Character
-                || value instanceof Enum
-                || value instanceof Class
-                || value instanceof Thread
-                || value instanceof Handler
-                || value instanceof Looper
-                || value instanceof Bundle
-                || value instanceof Intent
-                || value instanceof Resources
-                || value instanceof Drawable
-                || value instanceof MenuItem
-                || value instanceof View
-                || value instanceof Window) return false;
-        if (value instanceof Context && value != activity) return false;
-
-        String name = value.getClass().getName();
-        if (name.startsWith("java.lang.reflect.")
-                || name.startsWith("java.io.")
-                || name.startsWith("java.net.")
-                || name.startsWith("android.os.")
-                || name.startsWith("android.view.")
-                || name.startsWith("android.widget.")) return false;
-
-        ClassLoader loader = value.getClass().getClassLoader();
-        return loader == activity.getClass().getClassLoader()
-                || name.startsWith("org.chromium.")
-                || name.startsWith("com.google.android.apps.chrome.")
-                || name.startsWith("androidx.appcompat.view.menu.");
+    private View findResourceRecursively(View view, String entryName, int depth) {
+        if (view == null || depth > 18) return null;
+        if (hasEntryName(view, entryName)) return view;
+        if (!(view instanceof ViewGroup)) return null;
+        ViewGroup group = (ViewGroup) view;
+        for (int index = 0; index < group.getChildCount(); index++) {
+            View found = findResourceRecursively(group.getChildAt(index), entryName, depth + 1);
+            if (found != null) return found;
+        }
+        return null;
     }
 
-    private boolean isChromeAppMenu(Menu menu) {
+    private boolean hasEntryName(View view, String expected) {
+        int id = view.getId();
+        if (id == View.NO_ID || id == 0) return false;
         try {
-            if (menu == null || menu.size() < 4) return false;
-            int anchors = 0;
-            int supporting = 0;
-            for (int index = 0; index < menu.size(); index++) {
-                MenuItem item = menu.getItem(index);
-                String title = item.getTitle() == null
-                        ? ""
-                        : item.getTitle().toString().toLowerCase(Locale.US);
-                String resourceName = resourceName(item.getItemId());
-                String signal = title + " " + resourceName;
-
-                if (containsAny(signal,
-                        "settings", "history", "downloads", "download_page", "bookmarks",
-                        "bookmark", "recent tabs", "recent_tabs", "new incognito",
-                        "new_incognito", "clear browsing")) {
-                    anchors++;
-                } else if (containsAny(signal,
-                        "new tab", "new_tab", "find in page", "find_in_page", "translate",
-                        "desktop site", "request_desktop", "share", "reload", "forward",
-                        "open in chrome", "open_in_chrome")) {
-                    supporting++;
-                }
-            }
-            return anchors >= 1 && anchors + supporting >= 2;
+            return expected.equals(activity.getResources().getResourceEntryName(id));
         } catch (Throwable ignored) {
             return false;
         }
     }
 
-    private String resourceName(int id) {
-        if (id == 0 || id == Menu.NONE) return "";
+    private int dp(int value) {
+        return Math.round(value * activity.getResources().getDisplayMetrics().density);
+    }
+
+    private static List<View> windowRoots(Activity activity) {
+        List<View> roots = new ArrayList<>();
+        IdentityHashMap<View, Boolean> seen = new IdentityHashMap<>();
+        View decor = activity.getWindow().getDecorView();
+        if (decor != null) {
+            roots.add(decor);
+            seen.put(decor, true);
+        }
         try {
-            return activity.getResources().getResourceEntryName(id).toLowerCase(Locale.US);
-        } catch (Throwable ignored) {
-            return "";
-        }
-    }
-
-    private static boolean containsAny(String value, String... needles) {
-        for (String needle : needles) if (value.contains(needle)) return true;
-        return false;
-    }
-
-    private static MenuItem findByIdOrTitle(Menu menu, int id, String title) {
-        MenuItem item = menu.findItem(id);
-        if (item != null) return item;
-        for (int index = 0; index < menu.size(); index++) {
-            MenuItem candidate = menu.getItem(index);
-            CharSequence candidateTitle = candidate.getTitle();
-            if (candidateTitle != null && title.contentEquals(candidateTitle)) return candidate;
-        }
-        return null;
-    }
-
-    private static Object callNoArgs(Object target, String name) {
-        if (target == null) return null;
-        for (Method method : allMethods(target.getClass())) {
-            if (!name.equals(method.getName()) || method.getParameterTypes().length != 0) continue;
+            Class<?> type = Class.forName("android.view.WindowManagerGlobal");
+            Method getInstance = type.getDeclaredMethod("getInstance");
+            getInstance.setAccessible(true);
+            Object global = getInstance.invoke(null);
             try {
-                method.setAccessible(true);
-                return method.invoke(target);
+                Method getRootViews = type.getDeclaredMethod("getRootViews");
+                getRootViews.setAccessible(true);
+                Object value = getRootViews.invoke(global);
+                if (value instanceof View[]) {
+                    for (View root : (View[]) value) addRoot(roots, seen, root);
+                } else if (value instanceof Iterable) {
+                    for (Object item : (Iterable<?>) value) {
+                        if (item instanceof View) addRoot(roots, seen, (View) item);
+                    }
+                }
             } catch (Throwable ignored) {
-                return null;
+                Field field = type.getDeclaredField("mRoots");
+                field.setAccessible(true);
+                Object value = field.get(global);
+                if (value instanceof Iterable) {
+                    for (Object root : (Iterable<?>) value) {
+                        if (root == null) continue;
+                        try {
+                            Method getView = root.getClass().getDeclaredMethod("getView");
+                            getView.setAccessible(true);
+                            Object view = getView.invoke(root);
+                            if (view instanceof View) addRoot(roots, seen, (View) view);
+                        } catch (Throwable ignoredRoot) { }
+                    }
+                }
             }
-        }
-        return null;
+        } catch (Throwable ignored) { }
+        return roots;
     }
 
-    private static List<Field> allFields(Class<?> type) {
-        List<Field> result = new ArrayList<>();
-        for (Class<?> cursor = type; cursor != null && cursor != Object.class;
-             cursor = cursor.getSuperclass()) {
-            try { Collections.addAll(result, cursor.getDeclaredFields()); }
-            catch (Throwable ignored) { }
-        }
-        return result;
-    }
-
-    private static List<Method> allMethods(Class<?> type) {
-        List<Method> result = new ArrayList<>();
-        for (Class<?> cursor = type; cursor != null && cursor != Object.class;
-             cursor = cursor.getSuperclass()) {
-            try { Collections.addAll(result, cursor.getDeclaredMethods()); }
-            catch (Throwable ignored) { }
-        }
-        return result;
-    }
-
-    private static final class Node {
-        final Object value;
-        final int depth;
-        Node(Object value, int depth) {
-            this.value = value;
-            this.depth = depth;
-        }
+    private static void addRoot(
+            List<View> roots,
+            IdentityHashMap<View, Boolean> seen,
+            View root
+    ) {
+        if (root != null && seen.put(root, true) == null) roots.add(root);
     }
 }
