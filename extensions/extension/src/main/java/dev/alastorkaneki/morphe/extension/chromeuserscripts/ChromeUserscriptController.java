@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Application;
 import android.os.Bundle;
 import android.widget.Toast;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Starts the userscript runtime and binds MonkeyScript into Chrome's native app menu. */
@@ -12,6 +13,7 @@ final class ChromeUserscriptController implements Application.ActivityLifecycleC
 
     static void install(Application application) {
         if (INSTALLED.compareAndSet(false, true)) {
+            ChromeUserscriptShortcut.install(application);
             application.registerActivityLifecycleCallbacks(new ChromeUserscriptController());
         }
     }
@@ -20,6 +22,7 @@ final class ChromeUserscriptController implements Application.ActivityLifecycleC
         if (activity instanceof UserscriptManagerActivity
                 || activity instanceof UserscriptEditorActivity
                 || activity instanceof UserscriptInstallActivity) return;
+        ChromeUserscriptShortcut.install(activity);
         MonkeyRuntime.start(activity);
         ChromeAppMenuIntegrator.start(activity);
     }
