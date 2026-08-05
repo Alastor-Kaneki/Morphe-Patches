@@ -18,6 +18,26 @@ Targets Google Chrome Android (`com.android.chrome`). MonkeyScript combines the
 mobile-friendly ideas of Tampermonkey, Violentmonkey, FireMonkey, and
 Greasemonkey in a native manager built into patched Chrome.
 
+#### Patch-time app cloning
+
+The Morphe patch exposes two editable options:
+
+- **App name** — defaults to `Chrome MonkeyScript`.
+- **Package name** — defaults to `com.android.chrome.morphe`.
+
+The package ID must differ from stock Chrome. The resource patch qualifies
+relative components before changing the manifest package, renames launcher
+labels, removes shared-UID metadata, rewrites app-scoped permissions, task and
+process identities, provider authorities, authority string resources, and the
+injected MonkeyScript provider. This is intended to let the patched build install
+beside `com.android.chrome` instead of trying to replace the system-signed app.
+
+Changing Chrome's package and signing certificate can break Google-account sign
+in, Chrome Sync, Play-integrity checks, trusted WebAPK relationships, or other
+Google services that authorize the official package/signature pair. The browser
+and MonkeyScript manager do not depend on those services, but exact behavior
+still depends on the Chrome APK being patched.
+
 #### Manager and editor
 
 - Floating monkey button with current-page actions.
