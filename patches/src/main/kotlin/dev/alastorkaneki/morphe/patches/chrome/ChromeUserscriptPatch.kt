@@ -4,7 +4,6 @@ import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.patch.stringOption
 import dev.alastorkaneki.morphe.patches.chrome.Constants.CHROME
-import org.w3c.dom.Document
 import org.w3c.dom.Element
 import java.util.Locale
 
@@ -48,17 +47,6 @@ private val extraComponentAttributes = listOf(
     "android:zygotePreloadName"
 )
 
-// Chrome's menu resource names vary between release channels and APK layouts.
-// These are only an optional fast path; the extension also inserts rows into the
-// displayed Chrome app-menu window at runtime when none of these files exists.
-private val chromeAppMenuFiles = listOf(
-    "res/menu/main_menu.xml",
-    "res/menu/custom_tabs_menu.xml",
-    "res/menu/custom_tab_menu.xml",
-    "res/menu/app_menu.xml",
-    "res/menu/browser_app_menu.xml"
-)
-
 private fun qualifyComponentName(name: String, originalPackage: String): String = when {
     name.startsWith('.') -> originalPackage + name
     '.' !in name -> "$originalPackage.$name"
@@ -90,31 +78,29 @@ private fun rewriteAuthority(value: String, replacementPackage: String): String 
     }
 }
 
-private fun appendChromeMenuItem(
-    document: Document,
-    resourceId: String,
-    title: String,
-    icon: String
-) {
-    val items = document.getElementsByTagName("item")
-    val alreadyPresent = (0 until items.length)
-        .map { items.item(it) as Element }
-        .any { it.getAttribute("android:id") == "@+id/$resourceId" ||
-            it.getAttribute("android:id") == "@id/$resourceId" }
-    if (alreadyPresent) return
-
-    document.documentElement.appendChild(document.createElement("item").apply {
-        setAttribute("android:id", "@+id/$resourceId")
-        setAttribute("android:title", title)
-        setAttribute("android:icon", icon)
-        setAttribute("android:showAsAction", "never")
-    })
+private fun hasLauncherIntent(element: Element): Boolean {
+    val filters = element.getElementsByTagName("intent-filter")
+    for (filterIndex in 0 until filters.length) {
+        val filter = filters.item(filterIndex) as Element
+        val actions = filter.getElementsByTagName("action")
+        val categories = filter.getElementsByTagName("category")
+        val hasMain = (0 until actions.length).any {
+            (actions.item(it) as Element).getAttribute("android:name") ==
+                "android.intent.action.MAIN"
+        }
+        val hasLauncher = (0 until categories.length).any {
+            (categories.item(it) as Element).getAttribute("android:name") ==
+                "android.intent.category.LAUNCHER"
+        }
+        if (hasMain && hasLauncher) return true
+    }
+    return false
 }
 
 @Suppress("unused")
 internal val addChromeUserscriptManifestPatch = resourcePatch(
     description =
-        "Registers MonkeyScript, integrates it with Chrome's app menu, and adds patch-time Chrome cloning options."
+        "Registers the Chrome Material You userscript manager and patch-time Chrome cloning options."
 ) {
     compatibleWith(CHROME)
 
@@ -150,31 +136,20 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
 
             application.setAttribute("android:label", appName)
 
+            var chromeTheme = application.getAttribute("android:theme")
             listOf("activity", "activity-alias").forEach { tag ->
                 val nodes = application.getElementsByTagName(tag)
                 for (index in 0 until nodes.length) {
                     val element = nodes.item(index) as Element
-                    val filters = element.getElementsByTagName("intent-filter")
-                    var launcher = false
-                    for (filterIndex in 0 until filters.length) {
-                        val filter = filters.item(filterIndex) as Element
-                        val actions = filter.getElementsByTagName("action")
-                        val categories = filter.getElementsByTagName("category")
-                        val hasMain = (0 until actions.length).any {
-                            (actions.item(it) as Element).getAttribute("android:name") ==
-                                "android.intent.action.MAIN"
-                        }
-                        val hasLauncher = (0 until categories.length).any {
-                            (categories.item(it) as Element).getAttribute("android:name") ==
-                                "android.intent.category.LAUNCHER"
-                        }
-                        if (hasMain && hasLauncher) {
-                            launcher = true
-                            break
-                        }
+                    if (!hasLauncherIntent(element)) continue
+                    element.setAttribute("android:label", appName)
+                    if (chromeTheme.isBlank()) {
+                        chromeTheme = element.getAttribute("android:theme")
                     }
-                    if (launcher) element.setAttribute("android:label", appName)
                 }
+            }
+            if (chromeTheme.isBlank()) {
+                chromeTheme = "@android:style/Theme.Material.NoActionBar"
             }
 
             val providers = application.getElementsByTagName("provider")
@@ -203,37 +178,19 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
                     setAttribute("android:exported", "false")
                     setAttribute("android:excludeFromRecents", "true")
                     setAttribute("android:label", label)
-                    setAttribute("android:theme", "@android:style/Theme.Material.NoActionBar")
+                    setAttribute("android:theme", chromeTheme)
                     setAttribute("android:windowSoftInputMode", "adjustResize")
                 })
             }
 
-            addActivity(MANAGER_ACTIVITY, "MonkeyScript")
-            addActivity(EDITOR_ACTIVITY, "MonkeyScript Editor")
+            addActivity(MANAGER_ACTIVITY, "Userscripts")
+            addActivity(EDITOR_ACTIVITY, "Userscript editor")
             addActivity(INSTALL_ACTIVITY, "Install userscript")
         }
 
-        // Best-effort resource integration. Failure is deliberately non-fatal because
-        // many current Chrome APKs compile or rename these resources. The injected
-        // runtime inserts equivalent rows into the live app-menu window instead.
-        chromeAppMenuFiles.forEach { path ->
-            runCatching {
-                document(path).use { document ->
-                    appendChromeMenuItem(
-                        document,
-                        "monkeyscript_menu_id",
-                        "MonkeyScript",
-                        "@android:drawable/ic_menu_manage"
-                    )
-                    appendChromeMenuItem(
-                        document,
-                        "monkeyscript_install_menu_id",
-                        "Install userscript",
-                        "@android:drawable/stat_sys_download_done"
-                    )
-                }
-            }
-        }
+        // Do not mutate arbitrary res/menu files. Modern Chrome builds frequently rename or
+        // compile these resources, and view-level fallbacks can corrupt text/context menus.
+        // The extension adds entries only through Chrome's AppMenuHandler-backed Menu model.
     }
 
     finalize {
@@ -338,14 +295,14 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
 val chromeUserscriptManagerPatch = bytecodePatch(
     name = "MonkeyScript userscript manager",
     description =
-        "Integrates a monkey-style userscript manager with Chrome's app menu using resource and runtime fallbacks, with Greasy Fork/Sleazy Fork installation and publishing plus configurable app/package cloning.",
+        "Adds a Chrome Material You userscript manager using a Violentmonkey-derived parser and installer, Greasy Fork/Sleazy Fork installation and publishing, safe Chrome app-menu integration, and configurable app/package cloning.",
     default = true
 ) {
     compatibleWith(CHROME)
     dependsOn(addChromeUserscriptManifestPatch)
     extendWith("extensions/extension.mpe")
 
-    // Chrome's Java API and resources change frequently, so the injected engine
-    // locates the active Chromium Tab/WebContents and displayed app-menu at runtime.
+    // Chrome Android does not expose the desktop WebExtension runtime. The injected extension
+    // therefore adapts Violentmonkey's portable userscript logic to Chromium Tab/WebContents.
     execute { }
 }
