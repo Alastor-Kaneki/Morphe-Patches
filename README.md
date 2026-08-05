@@ -14,49 +14,83 @@ installing or activating it.
 
 ### Chrome Android — MonkeyScript userscript manager
 
-Targets Google Chrome Android (`com.android.chrome`). MonkeyScript combines the
-mobile-friendly ideas of Tampermonkey, Violentmonkey, FireMonkey, and
-Greasemonkey in a native manager built into patched Chrome.
+Targets Google Chrome Android (`com.android.chrome`). The patch adds a native
+userscript manager that adapts portable behavior from Violentmonkey for Chrome
+Android, where the normal desktop WebExtension runtime is unavailable.
 
-#### Embedded Chrome menu
+#### Chrome Material You interface
 
-The patch modifies Chrome's actual `main_menu.xml` and `custom_tabs_menu.xml`
-resources. Chrome's overflow menu receives:
+The manager, editor, and installation-review screens inherit Chrome's own app
+theme and resolve Chrome/Material You colors at runtime. Surfaces, primary and
+secondary accents, text, outlines, controls, ripples, status bars, and navigation
+bars follow the patched Chrome build's current light, dark, and dynamic-color
+palette. The previous orange-purple-red manager theme and independent AMOLED
+option were removed.
+
+#### Safe Chrome app-menu integration
+
+The patch no longer scans Android popup windows or modifies arbitrary menu view
+hierarchies. That older fallback could mistake selection and context menus for
+Chrome's overflow menu.
+
+MonkeyScript now starts from Chrome's `AppMenuHandler` object and searches only
+that app-menu object graph for its backing Android `Menu`. When available, it
+adds:
 
 - **MonkeyScript** — opens the complete userscript manager.
-- **Install userscript** — appears on a supported Fork script page or direct
-  `.user.js` / `.user.css` page and opens a full-screen installation review.
+- **Install userscript** — appears for supported Fork pages and direct
+  `.user.js` / `.user.css` URLs.
 
-There is no floating monkey button or separate popup control. The injected
-runtime binds actions to the resource-created Chrome menu rows when the app menu
-is displayed.
+The patch does not modify Chrome's text-selection, link, image, or other context
+menus. It also no longer requires specific `res/menu/*.xml` filenames.
+
+#### Violentmonkey-derived compatibility core
+
+Portable userscript behavior is adapted from Violentmonkey's MIT-licensed
+metadata parser and installer logic. The adaptation includes:
+
+- Userscript and userstyle metadata-block validation.
+- Localized metadata such as `@name:en` and `@description:en`.
+- Normalized hyphenated and underscored metadata keys.
+- Trusted install URL families used by Greasy Fork, Sleazy Fork, GitHub,
+  OpenUserJS, raw GitHub content, and GitHub releases.
+- Greasy Fork and Sleazy Fork script-page detection.
+- Correct Fork fallback URLs that preserve both the script ID and script slug.
+- Install-link interception for `.user.js` and `.user.css` links on Fork pages.
+
+The complete desktop Violentmonkey extension is not embedded because stock
+Chrome Android does not provide its required WebExtension APIs. Chrome tab
+access, script injection, storage, and the native manager are supplied by the
+Morphe Android bridge instead. Attribution and the upstream MIT license are in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 #### Greasy Fork and Sleazy Fork
 
-The manager has first-class **Greasy Fork** and **Sleazy Fork** buttons that open
-the selected catalogue inside the patched Chrome app. MonkeyScript can:
+The manager has first-class **Greasy Fork** and **Sleazy Fork** catalogue
+buttons. On either Fork, tapping a userscript install link is intercepted before
+Chrome handles it as a normal file navigation. The patch then opens a full-screen
+review showing the parsed metadata and complete source before installation.
+
+MonkeyScript can:
 
 - Recognize Greasy Fork and Sleazy Fork script pages.
-- Resolve their official install links and update-host URLs.
-- Review the script name, version, type, match rules, description, and complete
-  source before installation.
+- Resolve official install links and update-host URLs.
 - Install direct `.user.js` and `.user.css` URLs.
-- Retain the Fork install URL for future update checks.
+- Review the script name, version, type, rules, description, and source.
+- Retain the original install URL for update checks.
 
 #### Publishing userscripts
 
 The editor includes **Publish → Greasy Fork / Sleazy Fork**. MonkeyScript stages
 the current JavaScript userscript in Chrome's private storage, opens the selected
-Fork in the same Chrome app, and submits the source to that site's official
-prefill form. The site then displays its normal publish/update page for the user
-to review and confirm.
+Fork in the same Chrome app, and submits the source to that site's authenticated
+prefill form. The site displays its normal publish/update page for final review.
 
 Publishing uses the Fork account already logged into Chrome. MonkeyScript does
-not request, read, or store the account password or session cookie. Existing
-Fork scripts use the version-prefill route when their script ID can be recovered;
-new scripts use the new-script prefill route. Direct Fork publishing currently
-supports JavaScript userscripts. CSS userstyles remain installable and exportable
-as `.user.css` files.
+not request or store the account password or session cookie. Existing scripts
+use the version-prefill route when their Fork script ID is available; new scripts
+use the new-script prefill route. CSS userstyles remain installable and
+exportable, but direct Fork publishing currently targets JavaScript userscripts.
 
 #### Patch-time app cloning
 
@@ -67,52 +101,48 @@ The Morphe patch exposes two editable options:
 
 The package ID must differ from stock Chrome. The resource patch qualifies
 relative components before changing the manifest package, renames launcher
-labels, removes shared-UID metadata, rewrites app-scoped permissions, task and
-process identities, provider authorities, authority string resources, and the
-injected MonkeyScript provider. This is intended to let the patched build install
-beside `com.android.chrome` instead of trying to replace the system-signed app.
+labels, removes shared-UID metadata, and rewrites app-scoped permissions,
+processes, task affinities, provider authorities, authority string resources,
+and the injected provider. This is intended to let the patched build install
+beside `com.android.chrome`.
 
-Changing Chrome's package and signing certificate can break Google-account sign
-in, Chrome Sync, Play-integrity checks, trusted WebAPK relationships, or other
-Google services that authorize the official package/signature pair. The browser
-and MonkeyScript manager do not depend on those services, but exact behavior
-still depends on the Chrome APK being patched.
+Changing Chrome's package and signing certificate can break Google-account
+sign-in, Chrome Sync, Play Integrity relationships, trusted WebAPK relationships,
+or other Google services that authorize the official package/signature pair.
 
 #### Manager and editor
 
-- Native searchable dashboard with enable/disable switches and JS/CSS badges.
-- Full source editor with parsed-metadata inspection and URL-match testing.
-- Install from Fork pages, `.user.js`, `.user.css`, JavaScript, CSS, local files,
-  clipboard text, or a direct URL.
-- Create JavaScript userscripts and CSS userstyles from templates.
-- Check `@updateURL` / `@downloadURL` sources for updates.
-- Import/export individual scripts and JSON backups of the complete library.
-- Global pause, per-site disable rules, and true-black AMOLED UI.
+- Searchable Material You dashboard with enable/disable switches and JS/CSS
+  badges.
+- Source editor with parsed-metadata inspection and URL-rule testing.
+- Installation from Fork pages, `.user.js`, `.user.css`, local files, clipboard
+  text, or a direct URL.
+- JavaScript userscript and CSS userstyle templates.
+- `@updateURL` and `@downloadURL` update checks.
+- Individual script export and complete JSON backup/restore.
+- Global pause and per-site disable rules.
 
-#### Metadata compatibility
+#### Metadata and runtime compatibility
 
-MonkeyScript parses the standard monkey metadata block, including:
+MonkeyScript supports common metadata including:
 
-- `@name`, `@namespace`, `@version`, `@description`, and `@author`
-- `@match`, `@include`, `@exclude`, and `@exclude-match`
-- `@run-at`, `@noframes`, `@grant`, `@require`, and `@resource`
-- `@updateURL`, `@downloadURL`, `@icon`, and tags
-
-Chrome match patterns, wildcard globs, regular-expression includes, and
-`<all_urls>` are supported for HTTP/HTTPS pages.
-
-#### Runtime and GM compatibility
+- `@name`, localized names, `@namespace`, `@version`, `@description`, and
+  `@author`.
+- `@match`, `@include`, `@exclude`, and `@exclude-match`.
+- `@run-at`, `@noframes`, `@grant`, `@require`, and `@resource`.
+- `@updateURL`, `@downloadURL`, `@icon`, tags, `@connect`, `@antifeature`, and
+  `@compatible`.
 
 Matching scripts are injected into the active Chromium `WebContents`. The
-compatibility layer supplies commonly used APIs such as:
+compatibility layer provides commonly used APIs such as:
 
-- `GM_info` and `GM.info`
-- `GM_getValue`, `GM_setValue`, `GM_deleteValue`, and `GM_listValues`
-- Promise-style `GM.getValue`, `GM.setValue`, `GM.deleteValue`, and `GM.listValues`
-- `GM_addStyle`, `GM_log`, and their `GM.*` counterparts
-- `GM_registerMenuCommand`, `GM_openInTab`, clipboard, notification, and download
-- A best-effort `GM_xmlhttpRequest`
-- `unsafeWindow`
+- `GM_info` and `GM.info`.
+- Synchronous and Promise-style value storage APIs.
+- `GM_addStyle`, `GM_log`, and their `GM.*` counterparts.
+- `GM_registerMenuCommand`, `GM_openInTab`, clipboard, notification, and
+  download helpers.
+- A best-effort `GM_xmlhttpRequest`.
+- `unsafeWindow`.
 
 `@require` dependencies are fetched and cached when installing or updating a
 script. CSS userstyles are injected directly into matching pages.
@@ -120,23 +150,24 @@ script. CSS userstyles are injected directly into matching pages.
 #### Important limitations
 
 MonkeyScript is a userscript engine, not Chrome's desktop extension runtime.
-Chrome extension service workers, `chrome.tabs`, extension popups, native
-messaging, and other desktop extension APIs are not provided.
+Extension service workers, `chrome.tabs`, extension popups, native messaging,
+and other desktop extension APIs are not provided.
 
-The patch discovers Chrome's active Chromium `Tab`, `WebContents`, and displayed
-app-menu row views at runtime instead of fingerprinting one obfuscated Chrome
-release. This is more version-resilient but still needs runtime testing on each
-Chrome build. `document-start` is best effort, `GM_xmlhttpRequest` uses page
-networking and can be affected by CORS, and script value storage is scoped by
-script and page origin. Scripts are deliberately not injected in Incognito.
+Chrome's internal Java APIs vary between releases. The patch discovers the
+active Chromium `Tab`, `WebContents`, and `AppMenuHandler` at runtime instead of
+fingerprinting one obfuscated release. Exact menu availability and page
+injection still require runtime testing on the specific Chrome APK being
+patched. `document-start` is best effort, page-origin networking restrictions can
+affect `GM_xmlhttpRequest`, and value storage is scoped by script and page
+origin. Scripts are not injected in Incognito.
 
 #### Security behavior
 
 Userscripts execute code in pages you visit. Install only scripts you trust.
-MonkeyScript stores its database, cached dependencies, and temporary publish
+MonkeyScript stores its database, cached dependencies, and temporary publishing
 source in the patched app's private storage. It does not upload the script
-library, browser history, credentials, or page contents. Raw scripts without
-explicit match rules are disabled until reviewed.
+library, browser history, credentials, or page contents. Files without a valid
+userscript metadata block are rejected or disabled until reviewed.
 
 ## Build
 
@@ -161,9 +192,10 @@ The bundle is generated under `patches/build/libs/` as an `.mpp`. Every push to
 
 - `patches/` — Morphe patch definitions.
 - `extensions/extension/` — Android code injected by patches.
-- `tools/` — local parser, matcher, and payload tests.
+- `tools/` — local parser, matcher, installer, and payload tests.
 - `.github/workflows/` — CI and controlled GitHub Release publishing.
 
 ## License
 
-GPL-3.0. See [`LICENSE`](LICENSE).
+GPL-3.0. See [`LICENSE`](LICENSE). Third-party notices are in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
