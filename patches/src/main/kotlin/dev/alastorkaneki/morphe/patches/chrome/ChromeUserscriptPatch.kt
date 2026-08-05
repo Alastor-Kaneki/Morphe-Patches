@@ -100,7 +100,7 @@ private fun hasLauncherIntent(element: Element): Boolean {
 @Suppress("unused")
 internal val addChromeUserscriptManifestPatch = resourcePatch(
     description =
-        "Registers the Chrome Material You userscript manager and patch-time Chrome cloning options."
+        "Registers the process-aware Chrome Material You userscript manager and patch-time Chrome cloning options."
 ) {
     compatibleWith(CHROME)
 
@@ -152,17 +152,32 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
                 chromeTheme = "@android:style/Theme.Material.NoActionBar"
             }
 
-            val providers = application.getElementsByTagName("provider")
-            val providerAlreadyPresent = (0 until providers.length)
-                .map { providers.item(it) as Element }
-                .any { it.getAttribute("android:name") == INIT_PROVIDER }
+            // Chrome activities may run outside the application's default process. A provider
+            // registered only in the default process cannot observe those activities, which makes
+            // the patch appear completely absent. Install one initializer in every process that
+            // hosts an Activity, plus the default process used by the injected manager screens.
+            val applicationProcess = application.getAttribute("android:process")
+            val activityProcesses = linkedSetOf(applicationProcess)
+            val activityNodes = application.getElementsByTagName("activity")
+            for (index in 0 until activityNodes.length) {
+                val activity = activityNodes.item(index) as Element
+                activityProcesses += activity.getAttribute("android:process")
+                    .ifBlank { applicationProcess }
+            }
 
-            if (!providerAlreadyPresent) {
+            val providers = application.getElementsByTagName("provider")
+            val oldInitializers = (0 until providers.length)
+                .map { providers.item(it) as Element }
+                .filter { it.getAttribute("android:name") == INIT_PROVIDER }
+            oldInitializers.forEach(application::removeChild)
+
+            activityProcesses.forEachIndexed { index, process ->
                 application.appendChild(document.createElement("provider").apply {
                     setAttribute("android:name", INIT_PROVIDER)
-                    setAttribute("android:authorities", PROVIDER_AUTHORITY)
+                    setAttribute("android:authorities", "$PROVIDER_AUTHORITY.$index")
                     setAttribute("android:exported", "false")
                     setAttribute("android:initOrder", "1999999996")
+                    if (process.isNotBlank()) setAttribute("android:process", process)
                 })
             }
 
@@ -171,26 +186,32 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
                 .map { (activities.item(it) as Element).getAttribute("android:name") }
                 .toSet()
 
-            fun addActivity(name: String, label: String) {
+            fun addActivity(name: String, label: String, exported: Boolean = false) {
                 if (name in existingNames) return
                 application.appendChild(document.createElement("activity").apply {
                     setAttribute("android:name", name)
-                    setAttribute("android:exported", "false")
+                    setAttribute("android:exported", exported.toString())
                     setAttribute("android:excludeFromRecents", "true")
                     setAttribute("android:label", label)
                     setAttribute("android:theme", chromeTheme)
                     setAttribute("android:windowSoftInputMode", "adjustResize")
+                    if (name == MANAGER_ACTIVITY) {
+                        setAttribute("android:launchMode", "singleTask")
+                    }
                 })
             }
 
-            addActivity(MANAGER_ACTIVITY, "Userscripts")
+            // Exporting only the manager allows Android's explicit dynamic app shortcut to open it.
+            // No broad VIEW intent filter is registered, so unrelated apps cannot send arbitrary
+            // web traffic into the patched browser.
+            addActivity(MANAGER_ACTIVITY, "Userscripts", exported = true)
             addActivity(EDITOR_ACTIVITY, "Userscript editor")
             addActivity(INSTALL_ACTIVITY, "Install userscript")
         }
 
         // Do not mutate arbitrary res/menu files. Modern Chrome builds frequently rename or
         // compile these resources, and view-level fallbacks can corrupt text/context menus.
-        // The extension adds entries only through Chrome's AppMenuHandler-backed Menu model.
+        // The extension adds entries only to a Menu that matches Chrome app-menu signatures.
     }
 
     finalize {
@@ -295,7 +316,7 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
 val chromeUserscriptManagerPatch = bytecodePatch(
     name = "MonkeyScript userscript manager",
     description =
-        "Adds a Chrome Material You userscript manager using a Violentmonkey-derived parser and installer, Greasy Fork/Sleazy Fork installation and publishing, safe Chrome app-menu integration, and configurable app/package cloning.",
+        "Adds a process-aware Chrome Material You userscript manager using a Violentmonkey-derived parser and installer, safe Chrome app-menu integration, a guaranteed app shortcut, Greasy Fork/Sleazy Fork support, and configurable app/package cloning.",
     default = true
 ) {
     compatibleWith(CHROME)
