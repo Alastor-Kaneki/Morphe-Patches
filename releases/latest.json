@@ -1,7 +1,7 @@
 {
-  "version": "1.6.1",
-  "tag": "v1.6.1",
-  "asset": "patches-1.6.1.mpp",
-  "sha256": "ce70edda099f17a36fdcba51a3dc379804919c8f40e109ee29f80ad43f9c32fb",
-  "sourceCommit": "4f0efb77f82dc8c741b8525c68f138de864a3bff"
+  "version": "1.7.0",
+  "tag": "v1.7.0",
+  "asset": "patches-1.7.0.mpp",
+  "sha256": "1f4b376861a6c63abe3d7ca8554136dbd3f26a785bf1a5abab77378fac111b39",
+  "sourceCommit": "954ca00cac6af57690436ca3bfced3bee0ae3b72"
 }
