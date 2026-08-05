@@ -48,9 +48,15 @@ private val extraComponentAttributes = listOf(
     "android:zygotePreloadName"
 )
 
+// Chrome's menu resource names vary between release channels and APK layouts.
+// These are only an optional fast path; the extension also inserts rows into the
+// displayed Chrome app-menu window at runtime when none of these files exists.
 private val chromeAppMenuFiles = listOf(
     "res/menu/main_menu.xml",
-    "res/menu/custom_tabs_menu.xml"
+    "res/menu/custom_tabs_menu.xml",
+    "res/menu/custom_tab_menu.xml",
+    "res/menu/app_menu.xml",
+    "res/menu/browser_app_menu.xml"
 )
 
 private fun qualifyComponentName(name: String, originalPackage: String): String = when {
@@ -108,7 +114,7 @@ private fun appendChromeMenuItem(
 @Suppress("unused")
 internal val addChromeUserscriptManifestPatch = resourcePatch(
     description =
-        "Registers MonkeyScript, embeds it in Chrome's app menu, and adds patch-time Chrome cloning options."
+        "Registers MonkeyScript, integrates it with Chrome's app menu, and adds patch-time Chrome cloning options."
 ) {
     compatibleWith(CHROME)
 
@@ -207,7 +213,9 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
             addActivity(INSTALL_ACTIVITY, "Install userscript")
         }
 
-        var patchedMenus = 0
+        // Best-effort resource integration. Failure is deliberately non-fatal because
+        // many current Chrome APKs compile or rename these resources. The injected
+        // runtime inserts equivalent rows into the live app-menu window instead.
         chromeAppMenuFiles.forEach { path ->
             runCatching {
                 document(path).use { document ->
@@ -223,12 +231,8 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
                         "Install userscript",
                         "@android:drawable/stat_sys_download_done"
                     )
-                    patchedMenus++
                 }
             }
-        }
-        check(patchedMenus > 0) {
-            "Chrome app-menu resources were not found; cannot embed MonkeyScript in the menu."
         }
     }
 
@@ -334,14 +338,14 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
 val chromeUserscriptManagerPatch = bytecodePatch(
     name = "MonkeyScript userscript manager",
     description =
-        "Embeds a monkey-style userscript manager in Chrome's app menu with Greasy Fork/Sleazy Fork installation and publishing, plus configurable app/package cloning.",
+        "Integrates a monkey-style userscript manager with Chrome's app menu using resource and runtime fallbacks, with Greasy Fork/Sleazy Fork installation and publishing plus configurable app/package cloning.",
     default = true
 ) {
     compatibleWith(CHROME)
     dependsOn(addChromeUserscriptManifestPatch)
     extendWith("extensions/extension.mpe")
 
-    // Chrome's Java API changes frequently, so the injected engine locates the active
-    // Chromium Tab/WebContents and the resource-injected app-menu rows at runtime.
+    // Chrome's Java API and resources change frequently, so the injected engine
+    // locates the active Chromium Tab/WebContents and displayed app-menu at runtime.
     execute { }
 }
