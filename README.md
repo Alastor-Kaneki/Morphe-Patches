@@ -24,25 +24,39 @@ The manager, editor, and installation-review screens inherit Chrome's own app
 theme and resolve Chrome/Material You colors at runtime. Surfaces, primary and
 secondary accents, text, outlines, controls, ripples, status bars, and navigation
 bars follow the patched Chrome build's current light, dark, and dynamic-color
-palette. The previous orange-purple-red manager theme and independent AMOLED
-option were removed.
+palette.
+
+#### Process-aware startup and guaranteed access
+
+Chrome can place its browser activities in a process different from the
+application's default process. MonkeyScript registers an initializer in every
+process that hosts a Chrome activity, so the menu binder, page runtime, install
+interceptor, and userscript engine start in the process where Chrome's UI is
+actually running.
+
+The normal entry is **Userscripts** in Chrome's app menu. Android 7.1 and newer
+also receive a dynamic **Userscripts** shortcut: long-press the patched Chrome
+launcher icon to open the manager even when a particular Chrome release hides
+or replaces its internal app-menu model.
 
 #### Safe Chrome app-menu integration
 
-The patch no longer scans Android popup windows or modifies arbitrary menu view
-hierarchies. That older fallback could mistake selection and context menus for
-Chrome's overflow menu.
+The patch never scans Android popup windows or modifies arbitrary menu-view
+hierarchies. It therefore does not touch text-selection, link, image, or other
+context menus.
 
-MonkeyScript now starts from Chrome's `AppMenuHandler` object and searches only
-that app-menu object graph for its backing Android `Menu`. When available, it
-adds:
+MonkeyScript first checks Chrome's `AppMenuHandler`. For obfuscated releases it
+performs a bounded search through the Chrome Activity's non-view object graph and
+accepts a `Menu` only after it matches Chrome app-menu signatures such as
+Settings, History, Downloads, Bookmarks, recent tabs, and their resource-entry
+names. It then adds:
 
-- **MonkeyScript** — opens the complete userscript manager.
+- **Userscripts** — opens the complete userscript manager.
 - **Install userscript** — appears for supported Fork pages and direct
   `.user.js` / `.user.css` URLs.
 
-The patch does not modify Chrome's text-selection, link, image, or other context
-menus. It also no longer requires specific `res/menu/*.xml` filenames.
+Both menu rows carry explicit Activity intents as well as click listeners, which
+supports Chrome menu implementations that bypass ordinary item listeners.
 
 #### Violentmonkey-derived compatibility core
 
@@ -71,13 +85,9 @@ buttons. On either Fork, tapping a userscript install link is intercepted before
 Chrome handles it as a normal file navigation. The patch then opens a full-screen
 review showing the parsed metadata and complete source before installation.
 
-MonkeyScript can:
-
-- Recognize Greasy Fork and Sleazy Fork script pages.
-- Resolve official install links and update-host URLs.
-- Install direct `.user.js` and `.user.css` URLs.
-- Review the script name, version, type, rules, description, and source.
-- Retain the original install URL for update checks.
+MonkeyScript can recognize Fork script pages, resolve official install and
+update URLs, install direct `.user.js` and `.user.css` URLs, review source and
+metadata, and retain the original URL for update checks.
 
 #### Publishing userscripts
 
@@ -103,7 +113,7 @@ The package ID must differ from stock Chrome. The resource patch qualifies
 relative components before changing the manifest package, renames launcher
 labels, removes shared-UID metadata, and rewrites app-scoped permissions,
 processes, task affinities, provider authorities, authority string resources,
-and the injected provider. This is intended to let the patched build install
+and the injected providers. This is intended to let the patched build install
 beside `com.android.chrome`.
 
 Changing Chrome's package and signing certificate can break Google-account
@@ -124,28 +134,16 @@ or other Google services that authorize the official package/signature pair.
 
 #### Metadata and runtime compatibility
 
-MonkeyScript supports common metadata including:
-
-- `@name`, localized names, `@namespace`, `@version`, `@description`, and
-  `@author`.
-- `@match`, `@include`, `@exclude`, and `@exclude-match`.
-- `@run-at`, `@noframes`, `@grant`, `@require`, and `@resource`.
-- `@updateURL`, `@downloadURL`, `@icon`, tags, `@connect`, `@antifeature`, and
-  `@compatible`.
+MonkeyScript supports common metadata including localized names,
+`@namespace`, `@version`, `@description`, `@author`, match/include/exclude rules,
+`@run-at`, `@noframes`, `@grant`, `@require`, `@resource`, update/download URLs,
+icons, tags, `@connect`, `@antifeature`, and `@compatible`.
 
 Matching scripts are injected into the active Chromium `WebContents`. The
-compatibility layer provides commonly used APIs such as:
-
-- `GM_info` and `GM.info`.
-- Synchronous and Promise-style value storage APIs.
-- `GM_addStyle`, `GM_log`, and their `GM.*` counterparts.
-- `GM_registerMenuCommand`, `GM_openInTab`, clipboard, notification, and
-  download helpers.
-- A best-effort `GM_xmlhttpRequest`.
-- `unsafeWindow`.
-
-`@require` dependencies are fetched and cached when installing or updating a
-script. CSS userstyles are injected directly into matching pages.
+compatibility layer provides `GM_info`, synchronous and Promise-style value
+storage, style and logging APIs, registered commands, tab opening, clipboard,
+notifications, downloads, a best-effort `GM_xmlhttpRequest`, and `unsafeWindow`.
+`@require` dependencies are cached, and CSS userstyles are injected directly.
 
 #### Important limitations
 
@@ -153,13 +151,12 @@ MonkeyScript is a userscript engine, not Chrome's desktop extension runtime.
 Extension service workers, `chrome.tabs`, extension popups, native messaging,
 and other desktop extension APIs are not provided.
 
-Chrome's internal Java APIs vary between releases. The patch discovers the
-active Chromium `Tab`, `WebContents`, and `AppMenuHandler` at runtime instead of
-fingerprinting one obfuscated release. Exact menu availability and page
-injection still require runtime testing on the specific Chrome APK being
-patched. `document-start` is best effort, page-origin networking restrictions can
-affect `GM_xmlhttpRequest`, and value storage is scoped by script and page
-origin. Scripts are not injected in Incognito.
+Chrome's internal Java APIs vary between releases. The process-aware initializer
+and long-press shortcut guarantee access to the manager, but exact placement of
+the **Userscripts** row in Chrome's overflow menu still depends on the menu model
+used by the specific Chrome APK. `document-start` is best effort, page-origin
+networking restrictions can affect `GM_xmlhttpRequest`, value storage is scoped
+by script and page origin, and scripts are not injected in Incognito.
 
 #### Security behavior
 
