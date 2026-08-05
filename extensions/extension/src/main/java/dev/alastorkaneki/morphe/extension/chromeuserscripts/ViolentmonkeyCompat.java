@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
  * ports the portable parser/installer behavior. Chrome tab access and script execution remain in
  * the native Morphe bridge.
  */
-final class ViolentmonkeyCompat {
+public final class ViolentmonkeyCompat {
     private static final Pattern USER_SCRIPT_BLOCK = Pattern.compile(
             "(?s)//\\s*==UserScript==.*?//\\s*==/UserScript=="
     );
@@ -38,7 +38,7 @@ final class ViolentmonkeyCompat {
 
     private ViolentmonkeyCompat() { }
 
-    static boolean looksLikeUserscript(String source) {
+    public static boolean looksLikeUserscript(String source) {
         if (source == null) return false;
         String trimmed = source.trim();
         if (trimmed.isEmpty() || trimmed.startsWith("<")) return false;
@@ -47,7 +47,7 @@ final class ViolentmonkeyCompat {
         return hasBlock && NAME_LINE.matcher(source).find();
     }
 
-    static boolean isDirectUserscriptUrl(String value) {
+    public static boolean isDirectUserscriptUrl(String value) {
         if (value == null) return false;
         try {
             URI uri = new URI(value);
@@ -62,7 +62,7 @@ final class ViolentmonkeyCompat {
     }
 
     /** Mirrors Violentmonkey's trusted installer families. */
-    static boolean isTrustedInstallUrl(String value) {
+    public static boolean isTrustedInstallUrl(String value) {
         if (!isDirectUserscriptUrl(value)) return false;
         try {
             URI uri = new URI(value);
@@ -88,7 +88,7 @@ final class ViolentmonkeyCompat {
         }
     }
 
-    static boolean isForkScriptPage(String value) {
+    public static boolean isForkScriptPage(String value) {
         if (value == null) return false;
         try {
             URI uri = new URI(value);
@@ -99,7 +99,7 @@ final class ViolentmonkeyCompat {
         }
     }
 
-    static String fallbackForkInstallUrl(String pageUrl) throws Exception {
+    public static String fallbackForkInstallUrl(String pageUrl) throws Exception {
         URI uri = new URI(pageUrl);
         String host = normalizeHost(uri.getHost());
         if (!isForkHost(host)) throw new Exception("Not a Greasy Fork or Sleazy Fork page");
@@ -116,11 +116,11 @@ final class ViolentmonkeyCompat {
         return "https://" + updateHost + "/scripts/" + id + "/" + slug + ".user.js";
     }
 
-    static boolean hasInstallMarker(String value) {
+    public static boolean hasInstallMarker(String value) {
         return installUrlFromMarker(value) != null;
     }
 
-    static String installUrlFromMarker(String value) {
+    public static String installUrlFromMarker(String value) {
         if (value == null) return null;
         Matcher matcher = MARKER.matcher(value);
         if (!matcher.find()) return null;
@@ -132,12 +132,12 @@ final class ViolentmonkeyCompat {
         }
     }
 
-    static boolean isForkHost(String host) {
+    public static boolean isForkHost(String host) {
         String normalized = normalizeHost(host);
         return "greasyfork.org".equals(normalized) || "sleazyfork.org".equals(normalized);
     }
 
-    static String normalizeHost(String host) {
+    public static String normalizeHost(String host) {
         if (host == null) return "";
         String normalized = host.toLowerCase(Locale.US).trim();
         return normalized.startsWith("www.") ? normalized.substring(4) : normalized;
