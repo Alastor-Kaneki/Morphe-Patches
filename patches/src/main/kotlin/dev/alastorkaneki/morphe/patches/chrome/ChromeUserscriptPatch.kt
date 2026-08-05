@@ -47,7 +47,11 @@ private val extraComponentAttributes = listOf(
     "android:zygotePreloadName"
 )
 
+private fun isResourceReference(value: String): Boolean =
+    value.startsWith('@') || value.startsWith('?')
+
 private fun qualifyComponentName(name: String, originalPackage: String): String = when {
+    name.isBlank() || isResourceReference(name) -> name
     name.startsWith('.') -> originalPackage + name
     '.' !in name -> "$originalPackage.$name"
     else -> name
@@ -65,9 +69,8 @@ private fun rewritePackageScopedValue(value: String, replacementPackage: String)
 
 private fun rewriteAuthority(value: String, replacementPackage: String): String {
     val authority = value.trim()
-    if (authority.isEmpty()) return authority
+    if (authority.isEmpty() || isResourceReference(authority)) return authority
     return when {
-        authority.startsWith("@string/") -> authority
         authority == ORIGINAL_PACKAGE || authority.startsWith("$ORIGINAL_PACKAGE.") ->
             replacementPackage + authority.removePrefix(ORIGINAL_PACKAGE)
         authority.contains("\${applicationId}") ->
@@ -95,6 +98,60 @@ private fun hasLauncherIntent(element: Element): Boolean {
         if (hasMain && hasLauncher) return true
     }
     return false
+}
+
+private fun findActivity(application: Element, requestedName: String): Element? {
+    if (requestedName.isBlank() || isResourceReference(requestedName)) return null
+    val qualified = qualifyComponentName(requestedName, ORIGINAL_PACKAGE)
+    val activities = application.getElementsByTagName("activity")
+    for (index in 0 until activities.length) {
+        val candidate = activities.item(index) as Element
+        val candidateName = qualifyComponentName(
+            candidate.getAttribute("android:name"),
+            ORIGINAL_PACKAGE
+        )
+        if (candidateName == qualified) return candidate
+    }
+    return null
+}
+
+private fun resolveChromeTheme(application: Element): String {
+    val applicationTheme = application.getAttribute("android:theme")
+
+    // Chrome commonly exposes its launcher through an activity-alias. Follow targetActivity to
+    // the real ChromeTabbedActivity instead of falling back to Android's generic Material theme.
+    listOf("activity", "activity-alias").forEach { tag ->
+        val nodes = application.getElementsByTagName(tag)
+        for (index in 0 until nodes.length) {
+            val launcher = nodes.item(index) as Element
+            if (!hasLauncherIntent(launcher)) continue
+
+            launcher.getAttribute("android:theme")
+                .takeIf(String::isNotBlank)
+                ?.let { return it }
+
+            val targetName = launcher.getAttribute("android:targetActivity")
+            val target = findActivity(application, targetName)
+            target?.getAttribute("android:theme")
+                ?.takeIf(String::isNotBlank)
+                ?.let { return it }
+        }
+    }
+
+    // Exact fallback for Chrome packages whose launcher alias is heavily transformed.
+    val activities = application.getElementsByTagName("activity")
+    for (index in 0 until activities.length) {
+        val activity = activities.item(index) as Element
+        val name = activity.getAttribute("android:name")
+        if (!name.endsWith("ChromeTabbedActivity") &&
+            !name.endsWith("ChromeTabbedActivity2")) continue
+        activity.getAttribute("android:theme")
+            .takeIf(String::isNotBlank)
+            ?.let { return it }
+    }
+
+    return applicationTheme.takeIf(String::isNotBlank)
+        ?: "@android:style/Theme.Material.NoActionBar"
 }
 
 @Suppress("unused")
@@ -134,22 +191,17 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
             val application =
                 document.getElementsByTagName("application").item(0) as Element
 
+            val chromeTheme = resolveChromeTheme(application)
             application.setAttribute("android:label", appName)
 
-            var chromeTheme = application.getAttribute("android:theme")
             listOf("activity", "activity-alias").forEach { tag ->
                 val nodes = application.getElementsByTagName(tag)
                 for (index in 0 until nodes.length) {
                     val element = nodes.item(index) as Element
-                    if (!hasLauncherIntent(element)) continue
-                    element.setAttribute("android:label", appName)
-                    if (chromeTheme.isBlank()) {
-                        chromeTheme = element.getAttribute("android:theme")
+                    if (hasLauncherIntent(element)) {
+                        element.setAttribute("android:label", appName)
                     }
                 }
-            }
-            if (chromeTheme.isBlank()) {
-                chromeTheme = "@android:style/Theme.Material.NoActionBar"
             }
 
             // Chrome activities may run outside the application's default process. A provider
@@ -201,17 +253,14 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
                 })
             }
 
-            // Exporting only the manager allows Android's explicit dynamic app shortcut to open it.
-            // No broad VIEW intent filter is registered, so unrelated apps cannot send arbitrary
-            // web traffic into the patched browser.
             addActivity(MANAGER_ACTIVITY, "Userscripts", exported = true)
             addActivity(EDITOR_ACTIVITY, "Userscript editor")
             addActivity(INSTALL_ACTIVITY, "Install userscript")
         }
 
-        // Do not mutate arbitrary res/menu files. Modern Chrome builds frequently rename or
-        // compile these resources, and view-level fallbacks can corrupt text/context menus.
-        // The extension adds entries only to a Menu that matches Chrome app-menu signatures.
+        // Chrome 150 renders its app menu from a Chromium ModelList rather than android.view.Menu.
+        // The injected extension targets only the exact app_menu_list view at runtime and rejects
+        // the separate context_menu_list_view hierarchy.
     }
 
     finalize {
@@ -316,7 +365,7 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
 val chromeUserscriptManagerPatch = bytecodePatch(
     name = "MonkeyScript userscript manager",
     description =
-        "Adds a process-aware Chrome Material You userscript manager using a Violentmonkey-derived parser and installer, safe Chrome app-menu integration, a guaranteed app shortcut, Greasy Fork/Sleazy Fork support, and configurable app/package cloning.",
+        "Adds an exact Chrome 150 Material You userscript manager using a Violentmonkey-derived parser and installer, app_menu_list integration, Greasy Fork/Sleazy Fork support, publishing, and configurable app/package cloning.",
     default = true
 ) {
     compatibleWith(CHROME)
