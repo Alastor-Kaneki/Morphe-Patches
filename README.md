@@ -18,6 +18,46 @@ Targets Google Chrome Android (`com.android.chrome`). MonkeyScript combines the
 mobile-friendly ideas of Tampermonkey, Violentmonkey, FireMonkey, and
 Greasemonkey in a native manager built into patched Chrome.
 
+#### Embedded Chrome menu
+
+The patch modifies Chrome's actual `main_menu.xml` and `custom_tabs_menu.xml`
+resources. Chrome's overflow menu receives:
+
+- **MonkeyScript** — opens the complete userscript manager.
+- **Install userscript** — appears on a supported Fork script page or direct
+  `.user.js` / `.user.css` page and opens a full-screen installation review.
+
+There is no floating monkey button or separate popup control. The injected
+runtime binds actions to the resource-created Chrome menu rows when the app menu
+is displayed.
+
+#### Greasy Fork and Sleazy Fork
+
+The manager has first-class **Greasy Fork** and **Sleazy Fork** buttons that open
+the selected catalogue inside the patched Chrome app. MonkeyScript can:
+
+- Recognize Greasy Fork and Sleazy Fork script pages.
+- Resolve their official install links and update-host URLs.
+- Review the script name, version, type, match rules, description, and complete
+  source before installation.
+- Install direct `.user.js` and `.user.css` URLs.
+- Retain the Fork install URL for future update checks.
+
+#### Publishing userscripts
+
+The editor includes **Publish → Greasy Fork / Sleazy Fork**. MonkeyScript stages
+the current JavaScript userscript in Chrome's private storage, opens the selected
+Fork in the same Chrome app, and submits the source to that site's official
+prefill form. The site then displays its normal publish/update page for the user
+to review and confirm.
+
+Publishing uses the Fork account already logged into Chrome. MonkeyScript does
+not request, read, or store the account password or session cookie. Existing
+Fork scripts use the version-prefill route when their script ID can be recovered;
+new scripts use the new-script prefill route. Direct Fork publishing currently
+supports JavaScript userscripts. CSS userstyles remain installable and exportable
+as `.user.css` files.
+
 #### Patch-time app cloning
 
 The Morphe patch exposes two editable options:
@@ -40,14 +80,14 @@ still depends on the Chrome APK being patched.
 
 #### Manager and editor
 
-- Floating monkey button with current-page actions.
 - Native searchable dashboard with enable/disable switches and JS/CSS badges.
 - Full source editor with parsed-metadata inspection and URL-match testing.
-- Install from `.user.js`, JavaScript, CSS, clipboard text, or a direct URL.
+- Install from Fork pages, `.user.js`, `.user.css`, JavaScript, CSS, local files,
+  clipboard text, or a direct URL.
 - Create JavaScript userscripts and CSS userstyles from templates.
 - Check `@updateURL` / `@downloadURL` sources for updates.
 - Import/export individual scripts and JSON backups of the complete library.
-- Global pause, per-site disable rules, floating-button control, and AMOLED UI.
+- Global pause, per-site disable rules, and true-black AMOLED UI.
 
 #### Metadata compatibility
 
@@ -83,20 +123,20 @@ MonkeyScript is a userscript engine, not Chrome's desktop extension runtime.
 Chrome extension service workers, `chrome.tabs`, extension popups, native
 messaging, and other desktop extension APIs are not provided.
 
-The patch discovers Chrome's active Chromium `Tab` and `WebContents` at runtime
-instead of fingerprinting one obfuscated Chrome release. This is more
-version-resilient but still needs runtime testing on each Chrome build.
-`document-start` is best effort, `GM_xmlhttpRequest` uses page networking and can
-be affected by CORS, and script value storage is scoped by script and page origin.
-Scripts are deliberately not injected in Incognito.
+The patch discovers Chrome's active Chromium `Tab`, `WebContents`, and displayed
+app-menu row views at runtime instead of fingerprinting one obfuscated Chrome
+release. This is more version-resilient but still needs runtime testing on each
+Chrome build. `document-start` is best effort, `GM_xmlhttpRequest` uses page
+networking and can be affected by CORS, and script value storage is scoped by
+script and page origin. Scripts are deliberately not injected in Incognito.
 
 #### Security behavior
 
 Userscripts execute code in pages you visit. Install only scripts you trust.
-MonkeyScript stores its database and cached dependencies in the patched app's
-private storage. It does not upload the script library, browser history,
-credentials, or page contents. Raw scripts without explicit match rules are
-disabled until reviewed.
+MonkeyScript stores its database, cached dependencies, and temporary publish
+source in the patched app's private storage. It does not upload the script
+library, browser history, credentials, or page contents. Raw scripts without
+explicit match rules are disabled until reviewed.
 
 ## Build
 

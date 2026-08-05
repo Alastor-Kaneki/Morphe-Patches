@@ -17,7 +17,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
-/** Source editor, metadata inspector, and URL rule tester. */
+/** Source editor, metadata inspector, Fork publisher, and URL rule tester. */
 public final class UserscriptEditorActivity extends Activity {
     private static final int SAVE_SCRIPT = 51;
     private Userscript script;
@@ -28,7 +28,10 @@ public final class UserscriptEditorActivity extends Activity {
         super.onCreate(state);
         String id = getIntent().getStringExtra("script_id");
         script = id == null ? null : MonkeyStore.get(this, id);
-        if (script == null) { finish(); return; }
+        if (script == null) {
+            finish();
+            return;
+        }
         render();
     }
 
@@ -40,11 +43,14 @@ public final class UserscriptEditorActivity extends Activity {
         root.setBackgroundColor(MonkeyUi.bg(this));
         root.addView(label("MonkeyScript Editor", 23, true, MonkeyUi.text(this)));
         root.addView(label(script.name + "  •  "
-                + (Userscript.KIND_CSS.equals(script.kind) ? "CSS userstyle" : "JavaScript userscript"),
+                        + (Userscript.KIND_CSS.equals(script.kind)
+                        ? "CSS userstyle"
+                        : "JavaScript userscript"),
                 12, false, MonkeyUi.muted(this)));
 
         LinearLayout actions = new LinearLayout(this);
         add(actions, "Save", true, () -> save(false));
+        add(actions, "Publish", true, this::publish);
         add(actions, "Metadata", false, this::metadata);
         add(actions, "Test URL", false, this::testUrl);
         add(actions, "GM APIs", false, this::apis);
@@ -62,7 +68,8 @@ public final class UserscriptEditorActivity extends Activity {
         source.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         source.setTypeface(Typeface.MONOSPACE);
         source.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
-        source.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        source.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         source.setHorizontallyScrolling(true);
         source.setPadding(dp(12), dp(12), dp(12), dp(24));
@@ -71,7 +78,11 @@ public final class UserscriptEditorActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
-        root.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        root.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1
+        ));
 
         LinearLayout bottom = new LinearLayout(this);
         add(bottom, script.enabled ? "Disable" : "Enable", false, this::toggle);
@@ -88,14 +99,47 @@ public final class UserscriptEditorActivity extends Activity {
             script = MonkeyStore.get(this, script.id);
             toast("Saved " + script.name);
             if (finishAfter) finish();
-        } catch (Exception error) { toast(error.getMessage()); }
+        } catch (Exception error) {
+            toast(error.getMessage());
+        }
+    }
+
+    private void publish() {
+        if (Userscript.KIND_CSS.equals(script.kind)) {
+            toast("Greasy Fork and Sleazy Fork publishing currently accepts JavaScript userscripts");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Publish userscript")
+                .setMessage("The selected site will open in Chrome. MonkeyScript will submit the code to its official prefill page using your existing login, where you review and confirm the upload.")
+                .setItems(new String[]{"Greasy Fork", "Sleazy Fork"}, (dialog, which) -> {
+                    try {
+                        script.source = source.getText().toString();
+                        MonkeyStore.save(this, script);
+                        script = MonkeyStore.get(this, script.id);
+                        String host = which == 0
+                                ? ForkSiteSupport.GREASY_HOST
+                                : ForkSiteSupport.SLEAZY_HOST;
+                        ForkSiteSupport.queuePublish(this, script, host);
+                        toast("Opening " + (which == 0 ? "Greasy Fork" : "Sleazy Fork") + " publish review…");
+                    } catch (Exception error) {
+                        toast(error.getMessage());
+                    }
+                })
+                .show();
     }
 
     private void metadata() {
-        Userscript parsed = UserscriptMetadataParser.reparsePreservingState(script, source.getText().toString());
-        String text = "Name: " + parsed.name + "\nVersion: " + parsed.version
-                + "\nNamespace: " + parsed.namespace + "\nRun at: " + parsed.runAt
-                + "\nKind: " + parsed.kind + "\n\n@match\n" + join(parsed.matches)
+        Userscript parsed = UserscriptMetadataParser.reparsePreservingState(
+                script,
+                source.getText().toString()
+        );
+        String text = "Name: " + parsed.name
+                + "\nVersion: " + parsed.version
+                + "\nNamespace: " + parsed.namespace
+                + "\nRun at: " + parsed.runAt
+                + "\nKind: " + parsed.kind
+                + "\n\n@match\n" + join(parsed.matches)
                 + "\n\n@include\n" + join(parsed.includes)
                 + "\n\n@exclude\n" + join(parsed.excludes)
                 + "\n\n@grant\n" + join(parsed.grants)
@@ -117,10 +161,17 @@ public final class UserscriptEditorActivity extends Activity {
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton("Test", (dialog, which) -> {
                     Userscript parsed = UserscriptMetadataParser.reparsePreservingState(
-                            script, source.getText().toString());
+                            script,
+                            source.getText().toString()
+                    );
                     parsed.enabled = true;
-                    boolean matches = UrlPatternMatcher.matches(parsed, input.getText().toString().trim());
-                    toast(matches ? "This script matches the URL" : "This script does not match the URL");
+                    boolean matches = UrlPatternMatcher.matches(
+                            parsed,
+                            input.getText().toString().trim()
+                    );
+                    toast(matches
+                            ? "This script matches the URL"
+                            : "This script does not match the URL");
                 }).show();
     }
 
@@ -139,7 +190,9 @@ public final class UserscriptEditorActivity extends Activity {
 
     private void export() {
         pendingExport = source.getText().toString();
-        String extension = Userscript.KIND_CSS.equals(script.kind) ? ".user.css" : ".user.js";
+        String extension = Userscript.KIND_CSS.equals(script.kind)
+                ? ".user.css"
+                : ".user.js";
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT)
                 .setType("text/plain")
                 .putExtra(Intent.EXTRA_TITLE, safe(script.name) + extension);
@@ -151,20 +204,29 @@ public final class UserscriptEditorActivity extends Activity {
             script.enabled = !script.enabled;
             MonkeyStore.setEnabled(this, script.id, script.enabled);
             render();
-        } catch (Exception error) { toast(error.getMessage()); }
+        } catch (Exception error) {
+            toast(error.getMessage());
+        }
     }
 
     private void duplicate() {
         try {
             Userscript copy = UserscriptMetadataParser.parse(
-                    source.getText().toString(), script.name + " copy.user.js", "");
+                    source.getText().toString(),
+                    script.name + " copy.user.js",
+                    ""
+            );
             copy.name = script.name + " copy";
             copy.id = UserscriptMetadataParser.stableId(
-                    copy.namespace + ".copy." + System.currentTimeMillis(), copy.name);
+                    copy.namespace + ".copy." + System.currentTimeMillis(),
+                    copy.name
+            );
             copy.enabled = false;
             MonkeyStore.save(this, copy);
             toast("Duplicate created");
-        } catch (Exception error) { toast(error.getMessage()); }
+        } catch (Exception error) {
+            toast(error.getMessage());
+        }
     }
 
     private void delete() {
@@ -172,8 +234,12 @@ public final class UserscriptEditorActivity extends Activity {
                 .setTitle("Delete " + script.name + "?")
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton("Delete", (dialog, which) -> {
-                    try { MonkeyStore.remove(this, script.id); finish(); }
-                    catch (Exception error) { toast(error.getMessage()); }
+                    try {
+                        MonkeyStore.remove(this, script.id);
+                        finish();
+                    } catch (Exception error) {
+                        toast(error.getMessage());
+                    }
                 }).show();
     }
 
@@ -188,14 +254,19 @@ public final class UserscriptEditorActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request != SAVE_SCRIPT || result != RESULT_OK || data == null
-                || data.getData() == null || pendingExport == null) return;
+        if (request != SAVE_SCRIPT
+                || result != RESULT_OK
+                || data == null
+                || data.getData() == null
+                || pendingExport == null) return;
         Uri uri = data.getData();
         try (OutputStream output = getContentResolver().openOutputStream(uri)) {
             output.write(pendingExport.getBytes(StandardCharsets.UTF_8));
             pendingExport = null;
             toast("Script exported");
-        } catch (Exception error) { toast(error.getMessage()); }
+        } catch (Exception error) {
+            toast(error.getMessage());
+        }
     }
 
     private void add(LinearLayout row, String text, boolean primary, Runnable action) {
@@ -221,10 +292,14 @@ public final class UserscriptEditorActivity extends Activity {
 
     private int dp(int value) { return MonkeyUi.dp(this, value); }
     private void toast(String message) { ChromeUserscriptController.toast(this, message); }
+
     private static String join(java.util.List<String> values) {
         return values.isEmpty() ? "(none)" : android.text.TextUtils.join("\n", values);
     }
+
     private static String safe(String value) {
-        return value.toLowerCase(Locale.US).replaceAll("[^a-z0-9._-]+", "-").replaceAll("^-+|-+$", "");
+        return value.toLowerCase(Locale.US)
+                .replaceAll("[^a-z0-9._-]+", "-")
+                .replaceAll("^-+|-+$", "");
     }
 }

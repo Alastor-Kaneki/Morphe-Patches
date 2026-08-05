@@ -30,9 +30,18 @@ public final class UserscriptManagerActivity extends Activity {
     private LinearLayout list;
     private EditText search;
     private String pendingExport;
+    private String currentUrl;
 
-    @Override protected void onCreate(Bundle state) { super.onCreate(state); render(); }
-    @Override protected void onResume() { super.onResume(); if (list != null) refresh(); }
+    @Override protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        currentUrl = getIntent().getStringExtra("current_url");
+        render();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (list != null) refresh();
+    }
 
     private void render() {
         MonkeyUi.window(this);
@@ -43,6 +52,13 @@ public final class UserscriptManagerActivity extends Activity {
         root.addView(label("🐒  MonkeyScript", 25, true, MonkeyUi.text(this)));
         root.addView(label("Tamper × Violent × Fire × Grease — built into Chrome Android", 12, false, MonkeyUi.muted(this)));
 
+        if (ForkSiteSupport.isInstallablePage(currentUrl)) {
+            TextView current = MonkeyUi.button(this, "Install userscript from current page", true);
+            current.setOnClickListener(view -> ForkSiteSupport.openInstallPreview(this, currentUrl));
+            root.addView(current, margins(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 0, 12, 0, 4));
+        }
+
         search = new EditText(this);
         search.setHint("Search scripts, sites, tags…");
         search.setTextColor(MonkeyUi.text(this));
@@ -50,7 +66,8 @@ public final class UserscriptManagerActivity extends Activity {
         search.setSingleLine(true);
         search.setBackground(MonkeyUi.card(this));
         search.setPadding(dp(14), dp(10), dp(14), dp(10));
-        root.addView(search, margins(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 14, 0, 10));
+        root.addView(search, margins(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 0, 14, 0, 10));
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int st, int c, int a) { }
             public void onTextChanged(CharSequence s, int st, int b, int c) { refresh(); }
@@ -62,18 +79,28 @@ public final class UserscriptManagerActivity extends Activity {
         addAction(actions, "New", view -> chooseNew());
         addAction(actions, "Import", view -> pickImport());
         addAction(actions, "URL", view -> installUrl());
+        addAction(actions, "Greasy Fork", view -> ForkSiteSupport.openSite(this, ForkSiteSupport.GREASY_HOST));
+        addAction(actions, "Sleazy Fork", view -> ForkSiteSupport.openSite(this, ForkSiteSupport.SLEAZY_HOST));
         addAction(actions, "Update", view -> updateAll());
         addAction(actions, "Backup", view -> backup());
         addAction(actions, "Settings", view -> settings());
         HorizontalScrollWrapper wrapper = new HorizontalScrollWrapper(this);
         wrapper.addView(actions);
-        root.addView(wrapper, margins(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 0, 0, 10));
+        root.addView(wrapper, margins(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 0, 0, 0, 10));
 
         ScrollView scroll = new ScrollView(this);
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(list, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        scroll.addView(list, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        root.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1
+        ));
         setContentView(root);
         refresh();
     }
@@ -84,14 +111,16 @@ public final class UserscriptManagerActivity extends Activity {
         List<Userscript> scripts = MonkeyStore.list(this);
         int visible = 0;
         for (Userscript script : scripts) {
-            String haystack = (script.name + " " + script.description + " " + script.matches + " " + script.includes + " " + script.tags).toLowerCase(Locale.US);
+            String haystack = (script.name + " " + script.description + " " + script.matches
+                    + " " + script.includes + " " + script.tags).toLowerCase(Locale.US);
             if (!query.isEmpty() && !haystack.contains(query)) continue;
-            list.addView(card(script), margins(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 5, 0, 7));
+            list.addView(card(script), margins(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 0, 5, 0, 7));
             visible++;
         }
         if (visible == 0) {
             TextView empty = label(scripts.isEmpty()
-                    ? "No scripts installed. Import a .user.js file or create one."
+                    ? "No scripts installed. Import a .user.js file, browse a Fork, or create one."
                     : "No scripts match the search.", 14, false, MonkeyUi.muted(this));
             empty.setGravity(Gravity.CENTER);
             empty.setPadding(dp(12), dp(40), dp(12), dp(40));
@@ -108,7 +137,8 @@ public final class UserscriptManagerActivity extends Activity {
         top.setGravity(Gravity.CENTER_VERTICAL);
         TextView badge = label(Userscript.KIND_CSS.equals(script.kind) ? "CSS" : "JS", 11, true,
                 Userscript.KIND_CSS.equals(script.kind) ? MonkeyUi.PURPLE : MonkeyUi.ORANGE);
-        top.addView(badge, margins(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 0, 10, 0));
+        top.addView(badge, margins(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 0, 0, 10, 0));
         TextView name = label(script.name, 16, true, MonkeyUi.text(this));
         top.addView(name, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         Switch enabled = new Switch(this);
@@ -120,8 +150,11 @@ public final class UserscriptManagerActivity extends Activity {
         top.addView(enabled);
         card.addView(top);
         card.addView(label("v" + script.version + "  •  " + script.runAt + "  •  "
-                + (script.matches.size() + script.includes.size()) + " rule(s)", 12, false, MonkeyUi.muted(this)));
-        if (!script.description.isEmpty()) card.addView(label(script.description, 13, false, MonkeyUi.muted(this)));
+                + (script.matches.size() + script.includes.size()) + " rule(s)",
+                12, false, MonkeyUi.muted(this)));
+        if (!script.description.isEmpty()) {
+            card.addView(label(script.description, 13, false, MonkeyUi.muted(this)));
+        }
 
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.END);
@@ -146,8 +179,12 @@ public final class UserscriptManagerActivity extends Activity {
                     Userscript script = UserscriptMetadataParser.parse(template(kind),
                             which == 1 ? "new.user.css" : "new.user.js", "");
                     script.enabled = false;
-                    try { MonkeyStore.save(this, script); openEditor(script.id); }
-                    catch (Exception error) { toast(error.getMessage()); }
+                    try {
+                        MonkeyStore.save(this, script);
+                        openEditor(script.id);
+                    } catch (Exception error) {
+                        toast(error.getMessage());
+                    }
                 }).show();
     }
 
@@ -160,17 +197,16 @@ public final class UserscriptManagerActivity extends Activity {
 
     private void installUrl() {
         EditText input = new EditText(this);
-        input.setHint("https://example.com/script.user.js");
+        input.setHint("Greasy Fork page or direct .user.js URL");
         input.setSingleLine(true);
         new AlertDialog.Builder(this)
                 .setTitle("Install from URL")
                 .setView(input)
                 .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton("Install", (dialog, which) -> {
+                .setPositiveButton("Review", (dialog, which) -> {
                     String url = input.getText().toString().trim();
                     if (url.isEmpty()) return;
-                    toast("Downloading script…");
-                    MonkeyStore.installUrl(this, url, callback());
+                    ForkSiteSupport.openInstallPreview(this, url);
                 }).show();
     }
 
@@ -180,7 +216,10 @@ public final class UserscriptManagerActivity extends Activity {
     }
 
     private MonkeyStore.Callback callback() {
-        return (ok, message, script) -> runOnUiThread(() -> { toast(message); refresh(); });
+        return (ok, message, script) -> runOnUiThread(() -> {
+            toast(message);
+            refresh();
+        });
     }
 
     private void backup() {
@@ -190,7 +229,9 @@ public final class UserscriptManagerActivity extends Activity {
                     .setType("application/json")
                     .putExtra(Intent.EXTRA_TITLE, "monkeyscript-backup.json");
             startActivityForResult(intent, SAVE_BACKUP);
-        } catch (Exception error) { toast(error.getMessage()); }
+        } catch (Exception error) {
+            toast(error.getMessage());
+        }
     }
 
     private void exportScript(Userscript script) {
@@ -203,14 +244,17 @@ public final class UserscriptManagerActivity extends Activity {
     }
 
     private void settings() {
-        String[] labels = {"Enable userscripts", "Show floating monkey button", "True-black AMOLED manager"};
-        boolean[] values = {MonkeyStore.globalEnabled(this), MonkeyStore.showButton(this), MonkeyStore.amoled(this)};
+        String[] labels = {"Enable userscripts", "True-black AMOLED manager"};
+        boolean[] values = {MonkeyStore.globalEnabled(this), MonkeyStore.amoled(this)};
         new AlertDialog.Builder(this)
                 .setTitle("MonkeyScript settings")
                 .setMultiChoiceItems(labels, values, (dialog, which, checked) -> {
                     if (which == 0) MonkeyStore.globalEnabled(this, checked);
-                    if (which == 1) MonkeyStore.showButton(this, checked);
-                    if (which == 2) MonkeyStore.amoled(this, checked);
+                    if (which == 1) MonkeyStore.amoled(this, checked);
+                })
+                .setNeutralButton("Cancel pending publish", (dialog, which) -> {
+                    ForkSiteSupport.clearPending(this);
+                    toast("Pending Fork publish cleared");
                 })
                 .setPositiveButton("Apply", (dialog, which) -> render())
                 .show();
@@ -222,8 +266,12 @@ public final class UserscriptManagerActivity extends Activity {
                 .setMessage("This removes the script and its cached @require files.")
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton("Delete", (dialog, which) -> {
-                    try { MonkeyStore.remove(this, script.id); refresh(); }
-                    catch (Exception error) { toast(error.getMessage()); }
+                    try {
+                        MonkeyStore.remove(this, script.id);
+                        refresh();
+                    } catch (Exception error) {
+                        toast(error.getMessage());
+                    }
                 }).show();
     }
 
@@ -237,13 +285,16 @@ public final class UserscriptManagerActivity extends Activity {
         Uri uri = data.getData();
         try {
             if (request == PICK_IMPORT) {
-                String name = uri.getLastPathSegment() == null ? "import.user.js" : uri.getLastPathSegment();
+                String name = uri.getLastPathSegment() == null
+                        ? "import.user.js"
+                        : uri.getLastPathSegment();
                 String text;
                 try (InputStream input = getContentResolver().openInputStream(uri)) {
                     text = MonkeyStore.read(input, 8 * 1024 * 1024);
                 }
                 if (text.trim().startsWith("{") && text.contains("MonkeyScript-backup")) {
-                    MonkeyStore.restore(this, text); refresh();
+                    MonkeyStore.restore(this, text);
+                    refresh();
                 } else {
                     MonkeyStore.importText(this, text, name, "", callback());
                 }
@@ -254,14 +305,20 @@ public final class UserscriptManagerActivity extends Activity {
                 pendingExport = null;
                 toast("Export saved");
             }
-        } catch (Exception error) { toast(error.getMessage()); }
+        } catch (Exception error) {
+            toast(error.getMessage());
+        }
     }
 
     private String template(String kind) {
         if (Userscript.KIND_CSS.equals(kind)) {
-            return "/* ==UserStyle==\n@name New userstyle\n@namespace local.monkeyscript\n@version 1.0.0\n@match https://example.com/*\n==/UserStyle== */\n\nbody { }\n";
+            return "/* ==UserStyle==\n@name New userstyle\n@namespace local.monkeyscript\n"
+                    + "@version 1.0.0\n@match https://example.com/*\n==/UserStyle== */\n\nbody { }\n";
         }
-        return "// ==UserScript==\n// @name New userscript\n// @namespace local.monkeyscript\n// @version 1.0.0\n// @description Created with MonkeyScript\n// @match https://example.com/*\n// @grant none\n// @run-at document-end\n// ==/UserScript==\n\n(function () {\n  'use strict';\n})();\n";
+        return "// ==UserScript==\n// @name New userscript\n// @namespace local.monkeyscript\n"
+                + "// @version 1.0.0\n// @description Created with MonkeyScript\n"
+                + "// @match https://example.com/*\n// @grant none\n// @run-at document-end\n"
+                + "// ==/UserScript==\n\n(function () {\n  'use strict';\n})();\n";
     }
 
     private void addAction(LinearLayout row, String text, View.OnClickListener listener) {
@@ -279,7 +336,8 @@ public final class UserscriptManagerActivity extends Activity {
         return view;
     }
 
-    private LinearLayout.LayoutParams margins(int width, int height, int left, int top, int right, int bottom) {
+    private LinearLayout.LayoutParams margins(int width, int height,
+                                               int left, int top, int right, int bottom) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(width, height);
         params.setMargins(dp(left), dp(top), dp(right), dp(bottom));
         return params;
@@ -287,11 +345,17 @@ public final class UserscriptManagerActivity extends Activity {
 
     private int dp(int value) { return MonkeyUi.dp(this, value); }
     private void toast(String message) { ChromeUserscriptController.toast(this, message); }
+
     private static String safeName(String value) {
-        return value.toLowerCase(Locale.US).replaceAll("[^a-z0-9._-]+", "-").replaceAll("^-+|-+$", "");
+        return value.toLowerCase(Locale.US)
+                .replaceAll("[^a-z0-9._-]+", "-")
+                .replaceAll("^-+|-+$", "");
     }
 
     private static final class HorizontalScrollWrapper extends android.widget.HorizontalScrollView {
-        HorizontalScrollWrapper(Activity context) { super(context); setHorizontalScrollBarEnabled(false); }
+        HorizontalScrollWrapper(Activity context) {
+            super(context);
+            setHorizontalScrollBarEnabled(false);
+        }
     }
 }

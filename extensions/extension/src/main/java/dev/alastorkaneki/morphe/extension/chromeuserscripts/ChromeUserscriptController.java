@@ -1,25 +1,13 @@
 package dev.alastorkaneki.morphe.extension.chromeuserscripts;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Application;
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
-import android.content.Intent;
 import android.os.Bundle;
-import android.view.Gravity;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.FrameLayout;
-import android.widget.TextView;
 import android.widget.Toast;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Installs the floating monkey control and userscript runtime in Chrome activities. */
+/** Starts the userscript runtime and binds MonkeyScript into Chrome's native app menu. */
 final class ChromeUserscriptController implements Application.ActivityLifecycleCallbacks {
-    private static final String TAG = "dev.alastorkaneki.monkeyscript.BUTTON";
     private static final AtomicBoolean INSTALLED = new AtomicBoolean();
 
     static void install(Application application) {
@@ -29,113 +17,21 @@ final class ChromeUserscriptController implements Application.ActivityLifecycleC
     }
 
     @Override public void onActivityResumed(Activity activity) {
-        if (activity instanceof UserscriptManagerActivity || activity instanceof UserscriptEditorActivity) return;
+        if (activity instanceof UserscriptManagerActivity
+                || activity instanceof UserscriptEditorActivity
+                || activity instanceof UserscriptInstallActivity) return;
         MonkeyRuntime.start(activity);
-        attach(activity);
+        ChromeAppMenuIntegrator.start(activity);
     }
 
-    @Override public void onActivityPaused(Activity activity) { MonkeyRuntime.stop(activity); }
-    @Override public void onActivityDestroyed(Activity activity) { MonkeyRuntime.stop(activity); remove(activity); }
-
-    private static void attach(Activity activity) {
-        View existing = activity.getWindow().getDecorView().findViewWithTag(TAG);
-        if (existing != null) {
-            existing.setVisibility(MonkeyStore.showButton(activity) ? View.VISIBLE : View.GONE);
-            return;
-        }
-        TextView button = MonkeyUi.button(activity, "🐒", true);
-        button.setTag(TAG);
-        button.setTextSize(18);
-        button.setContentDescription("Open MonkeyScript");
-        button.setOnClickListener(view -> menu(activity));
-        button.setOnLongClickListener(view -> {
-            activity.startActivity(new Intent(activity, UserscriptManagerActivity.class));
-            return true;
-        });
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.END | Gravity.BOTTOM
-        );
-        params.setMargins(MonkeyUi.dp(activity, 16), MonkeyUi.dp(activity, 16),
-                MonkeyUi.dp(activity, 16), MonkeyUi.dp(activity, 92));
-        activity.addContentView(button, params);
-        button.setVisibility(MonkeyStore.showButton(activity) ? View.VISIBLE : View.GONE);
+    @Override public void onActivityPaused(Activity activity) {
+        MonkeyRuntime.stop(activity);
+        ChromeAppMenuIntegrator.stop(activity);
     }
 
-    private static void menu(Activity activity) {
-        String url = MonkeyRuntime.url(activity);
-        List<Userscript> matching = MonkeyRuntime.matches(activity);
-        String[] items = {
-                "Open dashboard",
-                "Run matching scripts (" + matching.size() + ")",
-                "Page script commands",
-                MonkeyStore.hostDisabled(activity, url) ? "Enable scripts on this site" : "Disable scripts on this site",
-                "Install from clipboard",
-                MonkeyStore.globalEnabled(activity) ? "Pause all scripts" : "Resume all scripts",
-                "Hide monkey button"
-        };
-        new AlertDialog.Builder(activity)
-                .setTitle("MonkeyScript")
-                .setMessage(url.isEmpty() ? "No active web page" : url)
-                .setItems(items, (dialog, which) -> {
-                    try {
-                        switch (which) {
-                            case 0:
-                                activity.startActivity(new Intent(activity, UserscriptManagerActivity.class)
-                                        .putExtra("current_url", url));
-                                break;
-                            case 1:
-                                int count = 0;
-                                for (Userscript script : matching) if (MonkeyRuntime.run(activity, script)) count++;
-                                toast(activity, "Ran " + count + " scripts");
-                                break;
-                            case 2:
-                                if (!MonkeyRuntime.commands(activity)) toast(activity, "Current page is unavailable");
-                                break;
-                            case 3:
-                                MonkeyStore.hostDisabled(activity, url, !MonkeyStore.hostDisabled(activity, url));
-                                MonkeyRuntime.refresh(activity);
-                                break;
-                            case 4:
-                                clipboard(activity);
-                                break;
-                            case 5:
-                                MonkeyStore.globalEnabled(activity, !MonkeyStore.globalEnabled(activity));
-                                MonkeyRuntime.refresh(activity);
-                                break;
-                            case 6:
-                                MonkeyStore.showButton(activity, false);
-                                remove(activity);
-                                break;
-                            default:
-                                break;
-                        }
-                    } catch (Throwable error) { toast(activity, error.getMessage()); }
-                })
-                .show();
-    }
-
-    private static void clipboard(Activity activity) {
-        ClipboardManager manager = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
-        ClipData clip = manager == null ? null : manager.getPrimaryClip();
-        if (clip == null || clip.getItemCount() == 0) { toast(activity, "Clipboard is empty"); return; }
-        String text = String.valueOf(clip.getItemAt(0).coerceToText(activity)).trim();
-        MonkeyStore.Callback callback = (ok, message, script) -> activity.runOnUiThread(() -> {
-            toast(activity, message); MonkeyRuntime.refresh(activity);
-        });
-        if (text.startsWith("http://") || text.startsWith("https://")) {
-            MonkeyStore.installUrl(activity, text, callback);
-        } else {
-            MonkeyStore.importText(activity, text, "clipboard.user.js", "", callback);
-        }
-    }
-
-    private static void remove(Activity activity) {
-        View view = activity.getWindow().getDecorView().findViewWithTag(TAG);
-        if (view != null && view.getParent() instanceof ViewGroup) {
-            ((ViewGroup) view.getParent()).removeView(view);
-        }
+    @Override public void onActivityDestroyed(Activity activity) {
+        MonkeyRuntime.stop(activity);
+        ChromeAppMenuIntegrator.stop(activity);
     }
 
     static void toast(Activity activity, String message) {

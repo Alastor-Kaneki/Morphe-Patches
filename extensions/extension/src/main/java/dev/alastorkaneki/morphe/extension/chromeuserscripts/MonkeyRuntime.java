@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-/** Navigation poller that injects matching scripts into the active page. */
+/** Navigation poller that injects matching scripts and handles Fork publishing/install flows. */
 final class MonkeyRuntime implements Runnable {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final Map<Activity, MonkeyRuntime> RUNS = new WeakHashMap<>();
@@ -19,7 +19,9 @@ final class MonkeyRuntime implements Runnable {
     MonkeyRuntime(Activity activity) { this.activity = activity; }
 
     static void start(Activity activity) {
-        if (activity instanceof UserscriptManagerActivity || activity instanceof UserscriptEditorActivity) return;
+        if (activity instanceof UserscriptManagerActivity
+                || activity instanceof UserscriptEditorActivity
+                || activity instanceof UserscriptInstallActivity) return;
         stop(activity);
         MonkeyRuntime runtime = new MonkeyRuntime(activity);
         synchronized (RUNS) { RUNS.put(activity, runtime); }
@@ -60,12 +62,18 @@ final class MonkeyRuntime implements Runnable {
         try {
             ChromeBridge.Page page = ChromeBridge.page(activity);
             if (page != null && !page.incognito && UrlPatternMatcher.isInjectableScheme(page.url)) {
-                int identity = System.identityHashCode(page.tab); long currentGeneration = MonkeyStore.generation();
-                if (identity != tab || !page.url.equals(last) || currentGeneration != generation) {
-                    tab = identity; last = page.url; generation = currentGeneration;
+                ForkSiteSupport.injectPendingPublish(activity, page);
+                int identity = System.identityHashCode(page.tab);
+                long currentGeneration = MonkeyStore.generation();
+                boolean navigationChanged = identity != tab || !page.url.equals(last);
+                if (navigationChanged || currentGeneration != generation) {
+                    tab = identity;
+                    last = page.url;
+                    generation = currentGeneration;
                     for (Userscript script : MonkeyStore.matching(activity, page.url)) {
                         ChromeBridge.exec(page, ScriptInjector.buildPayload(script, page.url, false));
                     }
+                    if (navigationChanged) ForkSiteSupport.maybePromptDirectInstall(activity, page.url);
                 }
             }
         } catch (Throwable ignored) { }
