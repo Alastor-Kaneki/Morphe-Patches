@@ -4,6 +4,7 @@ import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.patch.stringOption
 import dev.alastorkaneki.morphe.patches.chrome.Constants.CHROME
+import org.w3c.dom.Document
 import org.w3c.dom.Element
 import java.util.Locale
 
@@ -14,6 +15,8 @@ private const val MANAGER_ACTIVITY =
     "dev.alastorkaneki.morphe.extension.chromeuserscripts.UserscriptManagerActivity"
 private const val EDITOR_ACTIVITY =
     "dev.alastorkaneki.morphe.extension.chromeuserscripts.UserscriptEditorActivity"
+private const val INSTALL_ACTIVITY =
+    "dev.alastorkaneki.morphe.extension.chromeuserscripts.UserscriptInstallActivity"
 private const val PROVIDER_AUTHORITY =
     "com.android.chrome.dev.alastorkaneki.monkeyscript.init"
 
@@ -43,6 +46,11 @@ private val extraComponentAttributes = listOf(
     "android:parentActivityName",
     "android:targetActivity",
     "android:zygotePreloadName"
+)
+
+private val chromeAppMenuFiles = listOf(
+    "res/menu/main_menu.xml",
+    "res/menu/custom_tabs_menu.xml"
 )
 
 private fun qualifyComponentName(name: String, originalPackage: String): String = when {
@@ -76,10 +84,31 @@ private fun rewriteAuthority(value: String, replacementPackage: String): String 
     }
 }
 
+private fun appendChromeMenuItem(
+    document: Document,
+    resourceId: String,
+    title: String,
+    icon: String
+) {
+    val items = document.getElementsByTagName("item")
+    val alreadyPresent = (0 until items.length)
+        .map { items.item(it) as Element }
+        .any { it.getAttribute("android:id") == "@+id/$resourceId" ||
+            it.getAttribute("android:id") == "@id/$resourceId" }
+    if (alreadyPresent) return
+
+    document.documentElement.appendChild(document.createElement("item").apply {
+        setAttribute("android:id", "@+id/$resourceId")
+        setAttribute("android:title", title)
+        setAttribute("android:icon", icon)
+        setAttribute("android:showAsAction", "never")
+    })
+}
+
 @Suppress("unused")
 internal val addChromeUserscriptManifestPatch = resourcePatch(
     description =
-        "Registers MonkeyScript and adds patch-time Chrome app-name and package-ID cloning options."
+        "Registers MonkeyScript, embeds it in Chrome's app menu, and adds patch-time Chrome cloning options."
 ) {
     compatibleWith(CHROME)
 
@@ -161,27 +190,45 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
                 .map { (activities.item(it) as Element).getAttribute("android:name") }
                 .toSet()
 
-            if (MANAGER_ACTIVITY !in existingNames) {
+            fun addActivity(name: String, label: String) {
+                if (name in existingNames) return
                 application.appendChild(document.createElement("activity").apply {
-                    setAttribute("android:name", MANAGER_ACTIVITY)
+                    setAttribute("android:name", name)
                     setAttribute("android:exported", "false")
                     setAttribute("android:excludeFromRecents", "true")
-                    setAttribute("android:label", "MonkeyScript")
+                    setAttribute("android:label", label)
                     setAttribute("android:theme", "@android:style/Theme.Material.NoActionBar")
                     setAttribute("android:windowSoftInputMode", "adjustResize")
                 })
             }
 
-            if (EDITOR_ACTIVITY !in existingNames) {
-                application.appendChild(document.createElement("activity").apply {
-                    setAttribute("android:name", EDITOR_ACTIVITY)
-                    setAttribute("android:exported", "false")
-                    setAttribute("android:excludeFromRecents", "true")
-                    setAttribute("android:label", "MonkeyScript Editor")
-                    setAttribute("android:theme", "@android:style/Theme.Material.NoActionBar")
-                    setAttribute("android:windowSoftInputMode", "adjustResize")
-                })
+            addActivity(MANAGER_ACTIVITY, "MonkeyScript")
+            addActivity(EDITOR_ACTIVITY, "MonkeyScript Editor")
+            addActivity(INSTALL_ACTIVITY, "Install userscript")
+        }
+
+        var patchedMenus = 0
+        chromeAppMenuFiles.forEach { path ->
+            runCatching {
+                document(path).use { document ->
+                    appendChromeMenuItem(
+                        document,
+                        "monkeyscript_menu_id",
+                        "MonkeyScript",
+                        "@android:drawable/ic_menu_manage"
+                    )
+                    appendChromeMenuItem(
+                        document,
+                        "monkeyscript_install_menu_id",
+                        "Install userscript",
+                        "@android:drawable/stat_sys_download_done"
+                    )
+                    patchedMenus++
+                }
             }
+        }
+        check(patchedMenus > 0) {
+            "Chrome app-menu resources were not found; cannot embed MonkeyScript in the menu."
         }
     }
 
@@ -287,7 +334,7 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
 val chromeUserscriptManagerPatch = bytecodePatch(
     name = "MonkeyScript userscript manager",
     description =
-        "Adds a monkey-style userscript/userstyle manager plus configurable Chrome app and package renaming for side-by-side installation.",
+        "Embeds a monkey-style userscript manager in Chrome's app menu with Greasy Fork/Sleazy Fork installation and publishing, plus configurable app/package cloning.",
     default = true
 ) {
     compatibleWith(CHROME)
@@ -295,6 +342,6 @@ val chromeUserscriptManagerPatch = bytecodePatch(
     extendWith("extensions/extension.mpe")
 
     // Chrome's Java API changes frequently, so the injected engine locates the active
-    // Chromium Tab/WebContents at runtime instead of fingerprinting one Chrome build.
+    // Chromium Tab/WebContents and the resource-injected app-menu rows at runtime.
     execute { }
 }
