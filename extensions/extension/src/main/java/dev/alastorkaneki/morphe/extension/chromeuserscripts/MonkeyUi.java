@@ -118,6 +118,15 @@ final class MonkeyUi {
         activity.getWindow().getDecorView().setSystemUiVisibility(flags);
     }
 
+    static Typeface typeface(boolean bold) {
+        return Typeface.create("sans-serif", bold ? Typeface.BOLD : Typeface.NORMAL);
+    }
+
+    static void applyTypography(TextView view, boolean bold) {
+        view.setTypeface(typeface(bold));
+        view.setIncludeFontPadding(false);
+    }
+
     static TextView button(Activity activity, String label, boolean filled) {
         TextView view = new TextView(activity);
         int background = filled ? primary(activity) : surfaceVariant(activity);
@@ -127,7 +136,7 @@ final class MonkeyUi {
         view.setText(label);
         view.setTextColor(foreground);
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        view.setTypeface(Typeface.DEFAULT_BOLD);
+        applyTypography(view, true);
         view.setGravity(Gravity.CENTER);
         view.setMinHeight(dp(activity, 48));
         view.setPadding(dp(activity, 14), dp(activity, 10), dp(activity, 14), dp(activity, 10));
