@@ -8,6 +8,10 @@ INDEX="$ROOT/patches/src/main/resources/gx-icon-pack/index.txt"
 ARCHIVE_DIR="$ROOT/patches/src/main/resources/gx-icon-pack"
 DOWNLOADER="$ROOT/patches/src/main/kotlin/dev/alastorkaneki/morphe/patches/operagx/DownloadGxModsPatch.kt"
 
+if ! compgen -G "$ARCHIVE_DIR/gx-icon-pack-*.zip" >/dev/null; then
+    python3 "$ROOT/tools/prepare-gx-icon-pack.py"
+fi
+
 python3 - "$PATCH" "$REGISTRY" "$INDEX" "$ARCHIVE_DIR" "$DOWNLOADER" <<'PY'
 import re
 import sys
@@ -58,10 +62,10 @@ for archive in archives:
     with zipfile.ZipFile(archive) as zf:
         zipped.extend(zf.namelist())
 zipped = sorted(zipped)
-if any(not re.fullmatch(r'gxip_[a-z0-9_]+\.webp', name) for name in zipped):
+if any(not re.fullmatch(r'gxip_[a-z0-9_]+\.png', name) for name in zipped):
     raise SystemExit('archive contains an invalid Android resource name')
 
-expected = sorted(name + '.webp' for name in resources)
+expected = sorted(name + '.png' for name in resources)
 if zipped != expected:
     raise SystemExit('archive resources differ from index resources')
 
