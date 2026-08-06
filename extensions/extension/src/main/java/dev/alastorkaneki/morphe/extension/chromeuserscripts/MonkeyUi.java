@@ -11,6 +11,7 @@ import android.os.Build;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.TextView;
 
 /** Contrast-safe Chrome/Material You styling resolved from the patched app and system palette. */
@@ -103,11 +104,12 @@ final class MonkeyUi {
 
     static void window(Activity activity) {
         int background = bg(activity);
+        View decor = activity.getWindow().getDecorView();
         activity.getWindow().setStatusBarColor(background);
         activity.getWindow().setNavigationBarColor(background);
-        activity.getWindow().getDecorView().setBackgroundColor(background);
+        decor.setBackgroundColor(background);
 
-        int flags = activity.getWindow().getDecorView().getSystemUiVisibility();
+        int flags = decor.getSystemUiVisibility();
         if (isLight(background)) {
             flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
             flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
@@ -115,7 +117,22 @@ final class MonkeyUi {
             flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
             flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         }
-        activity.getWindow().getDecorView().setSystemUiVisibility(flags);
+        decor.setSystemUiVisibility(flags);
+
+        // Chrome's activity theme can expose an OEM serif fallback to injected screens. Apply the
+        // browser's expected sans-serif family after setContentView runs, while preserving source
+        // editors that explicitly use Typeface.MONOSPACE.
+        decor.post(() -> applySansTree(decor));
+        decor.postDelayed(() -> applySansTree(decor), 120);
+    }
+
+    static Typeface typeface(boolean bold) {
+        return Typeface.create("sans-serif", bold ? Typeface.BOLD : Typeface.NORMAL);
+    }
+
+    static void applyTypography(TextView view, boolean bold) {
+        view.setTypeface(typeface(bold));
+        view.setIncludeFontPadding(false);
     }
 
     static TextView button(Activity activity, String label, boolean filled) {
@@ -127,7 +144,7 @@ final class MonkeyUi {
         view.setText(label);
         view.setTextColor(foreground);
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        view.setTypeface(Typeface.DEFAULT_BOLD);
+        applyTypography(view, true);
         view.setGravity(Gravity.CENTER);
         view.setMinHeight(dp(activity, 48));
         view.setPadding(dp(activity, 14), dp(activity, 10), dp(activity, 14), dp(activity, 10));
@@ -162,6 +179,22 @@ final class MonkeyUi {
 
     static int dp(Activity activity, int value) {
         return Math.round(value * activity.getResources().getDisplayMetrics().density);
+    }
+
+    private static void applySansTree(View view) {
+        if (view instanceof TextView) {
+            TextView text = (TextView) view;
+            Typeface current = text.getTypeface();
+            if (!Typeface.MONOSPACE.equals(current)) {
+                boolean bold = current != null && current.isBold();
+                text.setTypeface(typeface(bold));
+            }
+        }
+        if (!(view instanceof ViewGroup)) return;
+        ViewGroup group = (ViewGroup) view;
+        for (int index = 0; index < group.getChildCount(); index++) {
+            applySansTree(group.getChildAt(index));
+        }
     }
 
     private static int color(Activity activity, int fallback, String... names) {
