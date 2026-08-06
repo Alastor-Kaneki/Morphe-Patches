@@ -1,7 +1,7 @@
 {
-  "version": "1.8.2",
-  "tag": "v1.8.2",
-  "asset": "patches-1.8.2.mpp",
-  "sha256": "b7f462023da56998fa04f7217f6b708a433be214a4e92c72d81cb0fd6ffa8518",
-  "sourceCommit": "c88eb6639d583c1883de3dc19e4863064b28d887"
+  "version": "1.9.0",
+  "tag": "v1.9.0",
+  "asset": "patches-1.9.0.mpp",
+  "sha256": "8c286a80effefd38c429d757d92c23529c86c961fc964281dd39366a953f862d",
+  "sourceCommit": "2f9f9e38388b810fb57b1f2442110dc1e3ee71cd"
 }
