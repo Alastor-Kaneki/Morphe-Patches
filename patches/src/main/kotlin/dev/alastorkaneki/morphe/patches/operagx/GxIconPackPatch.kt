@@ -71,7 +71,7 @@ private val addGxIconPackResourcesPatch = resourcePatch(
                     val entry = zip.nextEntry ?: break
                     if (!entry.isDirectory) {
                         val fileName = entry.name.substringAfterLast('/')
-                        if (!fileName.matches(Regex("gxip_[a-z0-9_]+\\.webp"))) {
+                        if (!fileName.matches(Regex("gxip_[a-z0-9_]+\\.png"))) {
                             throw PatchException("Invalid GX icon resource name: $fileName")
                         }
                         val output = get("res/drawable-nodpi/$fileName")
