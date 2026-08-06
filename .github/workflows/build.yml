@@ -35,6 +35,9 @@ jobs:
       - name: Test Chrome 150 exact menu hook
         run: bash tools/test-chrome150-menu-hook.sh
 
+      - name: Test Chrome page runtime and Material UI
+        run: bash tools/test-chrome-runtime-bridge.sh
+
       - name: Build Android Morphe bundle
         env:
           GITHUB_ACTOR: ${{ github.actor }}
