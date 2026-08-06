@@ -1,0 +1,56 @@
+Classic|gxip_classic|Basic
+Classic GX|gxip_classic_gx|Basic
+Cyberdeck|gxip_cyberdeck|Basic
+Aura|gxip_aura|Basic
+Aura GX|gxip_aura_gx|Basic
+Vaporwave|gxip_vaporwave|Basic
+Vaporwave GX|gxip_vaporwave_gx|Basic
+Horizon|gxip_horizon|Basic
+Horizon GX|gxip_horizon_gx|Basic
+Frost|gxip_frost|Basic
+Frost GX|gxip_frost_gx|Basic
+Carbon|gxip_carbon|Basic
+Carbon GX|gxip_carbon_gx|Basic
+Crimson|gxip_crimson|Basic
+Crimson GX|gxip_crimson_gx|Basic
+Ultraviolet|gxip_ultraviolet|Basic
+Ultraviolet GX|gxip_ultraviolet_gx|Basic
+Holo Classic|gxip_holo_classic|Holo
+Holo Cyberdeck|gxip_holo_cyberdeck|Holo
+Holo Aura|gxip_holo_aura|Holo
+Holo Vaporwave|gxip_holo_vaporwave|Holo
+Holo Horizon|gxip_holo_horizon|Holo
+Holo Frost|gxip_holo_frost|Holo
+Holo Carbon|gxip_holo_carbon|Holo
+Holo Crimson|gxip_holo_crimson|Holo
+Holo Ultraviolet|gxip_holo_ultraviolet|Holo
+Holo Matrix|gxip_holo_matrix|Holo
+Holo Inferno|gxip_holo_inferno|Holo
+Holo Toxic|gxip_holo_toxic|Holo
+Holo Ice|gxip_holo_ice|Holo
+Holo GX Classic|gxip_holo_gx_classic|Holo GX
+Holo GX Cyberdeck|gxip_holo_gx_cyberdeck|Holo GX
+Holo GX Aura|gxip_holo_gx_aura|Holo GX
+Holo GX Vaporwave|gxip_holo_gx_vaporwave|Holo GX
+Holo GX Horizon|gxip_holo_gx_horizon|Holo GX
+Holo GX Frost|gxip_holo_gx_frost|Holo GX
+Holo GX Carbon|gxip_holo_gx_carbon|Holo GX
+Holo GX Crimson|gxip_holo_gx_crimson|Holo GX
+Holo GX Ultraviolet|gxip_holo_gx_ultraviolet|Holo GX
+Holo GX Matrix|gxip_holo_gx_matrix|Holo GX
+Holo GX Inferno|gxip_holo_gx_inferno|Holo GX
+Holo GX Toxic|gxip_holo_gx_toxic|Holo GX
+Holo GX Ice|gxip_holo_gx_ice|Holo GX
+Neon Classic|gxip_neon_classic|Neon
+Neon Cyberdeck|gxip_neon_cyberdeck|Neon
+Neon Aura|gxip_neon_aura|Neon
+Neon Vaporwave|gxip_neon_vaporwave|Neon
+Neon Horizon|gxip_neon_horizon|Neon
+Neon Frost|gxip_neon_frost|Neon
+Neon Carbon|gxip_neon_carbon|Neon
+Neon Crimson|gxip_neon_crimson|Neon
+Neon Ultraviolet|gxip_neon_ultraviolet|Neon
+Neon Matrix|gxip_neon_matrix|Neon
+Neon Inferno|gxip_neon_inferno|Neon
+Neon Toxic|gxip_neon_toxic|Neon
+Neon Ice|gxip_neon_ice|Neon
