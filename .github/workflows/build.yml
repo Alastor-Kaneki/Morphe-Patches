@@ -29,6 +29,9 @@ jobs:
       - name: Test GX URL resolver
         run: bash tools/test-parser.sh
 
+      - name: Test standalone GX icon pack
+        run: bash tools/test-gx-icon-pack.sh
+
       - name: Test Chrome userscript engine
         run: bash tools/test-chrome-userscripts.sh
 
