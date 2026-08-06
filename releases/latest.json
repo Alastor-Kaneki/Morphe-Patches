@@ -1,7 +1,7 @@
 {
-  "version": "1.9.0",
-  "tag": "v1.9.0",
-  "asset": "patches-1.9.0.mpp",
-  "sha256": "8c286a80effefd38c429d757d92c23529c86c961fc964281dd39366a953f862d",
-  "sourceCommit": "2f9f9e38388b810fb57b1f2442110dc1e3ee71cd"
+  "version": "1.10.0",
+  "tag": "v1.10.0",
+  "asset": "patches-1.10.0.mpp",
+  "sha256": "4ae9cd6588ca22eec6c8019c350493004ff7bcbc30443461f3c00e40d8db9a80",
+  "sourceCommit": "5c176eff718dab177fe1ab104760399881162030"
 }
