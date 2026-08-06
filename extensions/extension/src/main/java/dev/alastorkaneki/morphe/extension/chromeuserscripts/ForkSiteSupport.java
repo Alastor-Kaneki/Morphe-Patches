@@ -104,22 +104,34 @@ final class ForkSiteSupport {
 
     static void openInstallPreview(Activity activity, String pageUrl) {
         activity.startActivity(new Intent(activity, UserscriptInstallActivity.class)
-                .putExtra("script_page_url", pageUrl));
+                .putExtra("script_page_url", pageUrl)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
     }
 
-    static void injectInstallClickBridge(ChromeBridge.Page page) {
-        if (page == null || page.incognito || !isForkPage(page.url)) return;
+    /**
+     * Redirects a website install click straight into the exported native installer activity.
+     * The old hash-only bridge could swallow Greasy Fork's click and then wait forever for Chrome
+     * to report the changed hash. The explicit Android intent does not depend on that polling path.
+     */
+    static void injectInstallClickBridge(Activity activity, ChromeBridge.Page page) {
+        if (activity == null || page == null || page.incognito || !isForkPage(page.url)) return;
+        String packageName = activity.getPackageName();
         String payload = "(function(){"
-                + "if(window.__MonkeyScriptInstallBridge)return;"
-                + "window.__MonkeyScriptInstallBridge=true;"
+                + "if(window.__MonkeyScriptInstallBridgeV2)return;"
+                + "window.__MonkeyScriptInstallBridgeV2=true;"
+                + "const pkg='" + packageName + "';"
                 + "const direct=u=>/\\.user\\.(?:js|css)(?:[?#]|$)/i.test(u||'');"
-                + "const resolve=a=>{let u='';try{u=new URL(a.href||a.dataset.codeUrl||'',location.href).href}catch(e){}return u};"
-                + "const mark=u=>{if(!direct(u))return false;window.__MonkeyScriptInstallRequest=u;"
-                + "try{history.replaceState(history.state,'',location.pathname+location.search+'#monkeyscript-install='+encodeURIComponent(u))}catch(e){location.hash='monkeyscript-install='+encodeURIComponent(u)}return true};"
+                + "const resolve=a=>{let u='';try{u=new URL((a&&((a.href)||(a.dataset&&a.dataset.codeUrl)))||'',location.href).href}catch(e){}return u};"
+                + "const launch=u=>{if(!direct(u))return false;"
+                + "window.__MonkeyScriptInstallRequest=u;"
+                + "const i='intent://install?url='+encodeURIComponent(u)+'#Intent;scheme=monkeyscript-install;package='+pkg+';end';"
+                + "setTimeout(()=>{location.href=i},0);"
+                + "setTimeout(()=>{if(document.visibilityState==='visible'){try{history.replaceState(history.state,'',location.pathname+location.search+'#monkeyscript-install='+encodeURIComponent(u))}catch(e){location.hash='monkeyscript-install='+encodeURIComponent(u)}}},900);"
+                + "return true};"
                 + "document.addEventListener('click',function(e){"
                 + "const a=e.target&&e.target.closest?e.target.closest('a[href],button[data-code-url],[data-code-url]'):null;"
-                + "if(!a)return;const u=resolve(a);if(!mark(u))return;"
-                + "e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();"
+                + "if(!a)return;const u=resolve(a);if(!direct(u))return;"
+                + "e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();launch(u);"
                 + "},true);"
                 + "const tag=()=>document.querySelectorAll('a.install-link[href],a[href*=\".user.js\"],a[href*=\".user.css\"],[data-code-url]').forEach(a=>{a.dataset.monkeyscriptReady='true';a.title='Install with Userscripts'});"
                 + "tag();new MutationObserver(tag).observe(document.documentElement,{childList:true,subtree:true});"
