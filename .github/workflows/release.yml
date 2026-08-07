@@ -61,7 +61,7 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          chmod +x gradlew
+          gradle wrapper --gradle-version 9.6.1
           ./gradlew generatePatchesList
 
       - name: Release
