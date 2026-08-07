@@ -1,3 +1,3 @@
 #!/bin/sh
-# Placeholder Gradle wrapper entrypoint using the Gradle installed by GitHub Actions.
+# CI Gradle entrypoint. GitHub Actions installs Gradle 9.6.1 before this is invoked.
 exec gradle "$@"
