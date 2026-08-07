@@ -21,8 +21,8 @@ if not updated:
 path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 PY
 
-gradle buildAndroid --stacktrace
-gradle generatePatchesList --stacktrace
+./gradlew buildAndroid --stacktrace
+./gradlew generatePatchesList --stacktrace
 
 jq --arg version "$VERSION" '.version = $version' \
   patches-list.json > patches-list.json.tmp
