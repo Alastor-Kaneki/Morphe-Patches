@@ -44,18 +44,19 @@ def pkg_emoji(pkg):
 # Group patches by package; patches with no compatiblePackages are universal.
 # JSON structure: compatiblePackages is a list of objects with
 # { packageName, name, targets: [{ version, isExperimental, description }] }
-by_pkg = {}
+by_pkg = {}   # packageName -> { name, emoji, patches, targets }
 universal = {}
 
 for patch in data["patches"]:
     cp = patch.get("compatiblePackages")
     if not cp:
+        # Deduplicate universal patches by name
         if patch["name"] not in universal:
             universal[patch["name"]] = patch
         continue
     for pkg_entry in cp:
         pkg  = pkg_entry["packageName"]
-        name = pkg_entry.get("name") or pkg
+        name = pkg_entry.get("name") or pkg  # fall back to package name if no label
         if pkg not in by_pkg:
             by_pkg[pkg] = {
                 "name":    name,
@@ -63,6 +64,7 @@ for patch in data["patches"]:
                 "patches": {},
                 "targets": pkg_entry.get("targets", []),
             }
+        # Deduplicate patches that appear across multiple packages
         if patch["name"] not in by_pkg[pkg]["patches"]:
             by_pkg[pkg]["patches"][patch["name"]] = patch
 
@@ -82,6 +84,7 @@ def patches_table(patches):
         a = anchor(p["name"])
         options = p.get("options") or []
         if options:
+            # Show only option titles as a bullet list
             parts = [opt.get("title") or opt.get("key") or "" for opt in options]
             opts_cell = "<br>".join(f"• {t}" for t in parts)
         else:
@@ -114,6 +117,7 @@ def versions_table(targets):
     sep = "| " + " | ".join(":---:" for _ in cells) + " |"
     rows = [header, sep]
 
+    # Optional description row — only rendered if at least one target has one
     descs = [(t.get("description") or "").replace("\n", "<br>") for t in targets]
     if any(descs):
         rows.append("| " + " | ".join(descs) + " |")
@@ -146,12 +150,14 @@ def build_content(expanded=False):
         f"{total} patches total"
     ]
 
+    # One spoiler per app, in the order they appear in the JSON
     for pkg, entry in by_pkg.items():
         patches = list(entry["patches"].values())
         label   = f"{entry['emoji']} {entry['name']}"
         lines.append(spoiler(label, len(patches), entry["targets"], patches_table(patches), expanded))
         lines.append("")
 
+    # Universal patches (no specific app)
     if universal:
         uni_patches = list(universal.values())
         noun = "patch" if len(uni_patches) == 1 else "patches"
@@ -168,18 +174,22 @@ def build_content(expanded=False):
     return "\n".join(lines)
 
 
+# Build and inject
 raw_ver = data["version"]
+# Strip leading "v" if present
 ver   = raw_ver.lstrip("v")
 total = sum(len(e["patches"]) for e in by_pkg.values()) + len(universal)
 
 readme = readme_path.read_text(encoding="utf-8")
 
+# Marker pattern — matches both <!-- PATCHES_START --> and <!-- PATCHES_START EXPANDED -->
 START_PATTERN = r"<!-- PATCHES_START(?:\s+EXPANDED)?\s*-->"
 END_MARKER    = "<!-- PATCHES_END -->"
 
 marker_match = re.search(START_PATTERN, readme)
 
 if not marker_match or END_MARKER not in readme:
+    # Fallback: print to stdout so CI can catch the issue
     print(build_content(expanded=False))
     sys.stderr.write(
         f"⚠️  Markers <!-- PATCHES_START [EXPANDED] --> / {END_MARKER} not found in {readme_path}. "
@@ -189,8 +199,13 @@ if not marker_match or END_MARKER not in readme:
 
 actual_start = marker_match.group(0)
 
+# Auto-expand threshold
 AUTO_EXPAND_THRESHOLD = 20
 
+# Spoilers are expanded if:
+# 1. Total patch count is small (≤ AUTO_EXPAND_THRESHOLD)
+#    with only a few patches where collapsing adds no benefit.
+# 2. The README marker explicitly requests it: <!-- PATCHES_START EXPANDED -->
 expanded = (
     total <= AUTO_EXPAND_THRESHOLD or
     "EXPANDED" in actual_start
@@ -198,6 +213,7 @@ expanded = (
 
 generated  = build_content(expanded=expanded)
 
+# Replace template links if present
 readme = readme.replace("https://morphe.software/add-source?github=xyz-user/xyz-patches", f"https://morphe.software/add-source?github={repo_full}")
 readme = readme.replace("https://github.com/xyz-user/xyz-patches", f"https://github.com/{repo_full}")
 
