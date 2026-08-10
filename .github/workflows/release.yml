@@ -60,7 +60,9 @@ jobs:
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew generatePatchesList --stacktrace --no-daemon
+        run: |
+          gradle wrapper --gradle-version 9.6.1
+          ./gradlew generatePatchesList --stacktrace --no-daemon
 
       - name: Release
         uses: cycjimmy/semantic-release-action@v6
