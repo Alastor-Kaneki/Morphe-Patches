@@ -1,3 +1,9 @@
+## [1.13.3](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.13.2...v1.13.3) (2026-08-18)
+
+### 🐛 Bug Fixes
+
+* **pixilart:** hard-disable native ad display actions ([e770611](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/e770611fb491f52a98deb4cadb8c0bb7f8dd47f3))
+
 ## [1.13.2](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.13.1...v1.13.2) (2026-08-18)
 
 ### 🐛 Bug Fixes
