@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.13.3",
+  "version": "1.13.4",
   "patches": [
     {
       "name": "Customize Suno branding",
@@ -170,7 +170,7 @@
     },
     {
       "name": "Remove ads",
-      "description": "Hard-disables Pixilart native banner/interstitial ads, injected web ads, and promoted/feed ad cards.",
+      "description": "Hard-disables Pixilart native/Cordova ads, drawing-editor web ads, and promoted/feed ad cards.",
       "default": true,
       "dependencies": [],
       "compatiblePackages": [

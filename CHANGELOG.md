@@ -1,3 +1,9 @@
+## [1.13.4](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.13.3...v1.13.4) (2026-08-18)
+
+### 🐛 Bug Fixes
+
+* **pixilart:** block Cordova ad bridge ([249e647](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/249e6475c8af65002da525482b0346fb6c183dd1))
+
 ## [1.13.3](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.13.2...v1.13.3) (2026-08-18)
 
 ### 🐛 Bug Fixes
