@@ -6,45 +6,39 @@ import dev.alastorkaneki.morphe.patches.pixilart.Constants.PIXILART
 
 private const val APP_BUNDLE = "assets/www/static/js/app.js"
 
-private val ADMOB_PROVIDER_CHECK = """
-    var isAvailable = function isAvailable() {
-        return typeof admob !== 'undefined';
-      };
-""".trimIndent()
+private val ADMOB_PROVIDER_CHECK = Regex(
+    """var\s+isAvailable\s*=\s*function\s+isAvailable\(\)\s*\{\s*return\s+typeof\s+admob\s*!==\s*['\"]undefined['\"]\s*;\s*\}\s*;"""
+)
 
-private const val WEB_AD_SCRIPT_ENTRY =
-    "appendScripts: function() {\n\t\tif(this.ads.loaded) return;"
+private val WEB_AD_SCRIPT_ENTRY = Regex(
+    """appendScripts\s*:\s*function\s*\(\)\s*\{\s*if\s*\(\s*this\.ads\.loaded\s*\)\s*return\s*;"""
+)
 
-private const val WEB_AD_SCRIPT_DISABLED =
-    "appendScripts: function() {\n\t\treturn;\n\t\tif(this.ads.loaded) return;"
+private val FEED_AD_BRANCH = Regex(
+    """\(_vm\.activity\.type\s*==\s*['\"]ad['\"]\)\s*\?\s*_c\(\s*['\"]div['\"]\s*,\s*\[_c\(\s*['\"]ad['\"]\s*,\s*\{attrs\s*:\s*\{['\"]ad['\"]\s*:\s*_vm\.activity\}\}\)\]\s*,\s*1\s*\)\s*:"""
+)
 
-private const val FEED_AD_BRANCH =
-    "(_vm.activity.type == 'ad')?_c('div',[_c('ad',{attrs:{\"ad\":_vm.activity}})],1):"
-
-private const val FEED_AD_BRANCH_DISABLED =
-    "(_vm.activity.type == 'ad')?_vm._e():"
-
-private fun replaceExactlyOnce(
+private fun replaceRegexExactlyOnce(
     source: String,
-    needle: String,
+    pattern: Regex,
     replacement: String,
     label: String
 ): String {
-    val first = source.indexOf(needle)
-    if (first < 0) {
+    val matches = pattern.findAll(source).toList()
+    if (matches.isEmpty()) {
         throw PatchException(
-            "Pixilart $label hook was not found. This APK likely differs from the verified 1.9.0 build."
+            "Pixilart $label hook was not found. This APK may have been modified already or differs from the verified 1.9.0 build."
         )
     }
 
-    val second = source.indexOf(needle, first + needle.length)
-    if (second >= 0) {
+    if (matches.size != 1) {
         throw PatchException(
-            "Expected exactly one Pixilart $label hook, but multiple matches were found."
+            "Expected exactly one Pixilart $label hook, but found ${matches.size}."
         )
     }
 
-    return source.replaceRange(first, first + needle.length, replacement)
+    val match = matches.single()
+    return source.replaceRange(match.range, replacement)
 }
 
 /**
@@ -55,7 +49,8 @@ private fun replaceExactlyOnce(
  * 2. Web ads injected by the bundled drawing UI (Freestar, NitroPay, Playwire and AdSense).
  * 3. Server-fed activity items with type == "ad", including promoted cards.
  *
- * This patch disables all three without changing Pro or ad-free account entitlements.
+ * Whitespace-tolerant anchors are used because Morphe/resource processing can normalize
+ * formatting in bundled JavaScript without changing the actual code.
  */
 @Suppress("unused")
 val removeAdsPatch = resourcePatch(
@@ -74,9 +69,9 @@ val removeAdsPatch = resourcePatch(
 
         var source = appBundle.readText()
 
-        source = replaceExactlyOnce(
+        source = replaceRegexExactlyOnce(
             source = source,
-            needle = ADMOB_PROVIDER_CHECK,
+            pattern = ADMOB_PROVIDER_CHECK,
             replacement = """
                 var isAvailable = function isAvailable() {
                     return false;
@@ -85,17 +80,17 @@ val removeAdsPatch = resourcePatch(
             label = "AdMob provider"
         )
 
-        source = replaceExactlyOnce(
+        source = replaceRegexExactlyOnce(
             source = source,
-            needle = WEB_AD_SCRIPT_ENTRY,
-            replacement = WEB_AD_SCRIPT_DISABLED,
+            pattern = WEB_AD_SCRIPT_ENTRY,
+            replacement = "appendScripts: function() { return;",
             label = "web-ad script loader"
         )
 
-        source = replaceExactlyOnce(
+        source = replaceRegexExactlyOnce(
             source = source,
-            needle = FEED_AD_BRANCH,
-            replacement = FEED_AD_BRANCH_DISABLED,
+            pattern = FEED_AD_BRANCH,
+            replacement = "(_vm.activity.type == 'ad')?_vm._e():",
             label = "feed-ad renderer"
         )
 
