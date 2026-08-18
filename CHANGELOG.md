@@ -1,3 +1,9 @@
+## [1.13.1](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.13.0...v1.13.1) (2026-08-18)
+
+### 🐛 Bug Fixes
+
+* **pixilart:** remove remaining web and feed ads ([6857867](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/6857867b0496497798b054a104f4250f80ea6183))
+
 ## [1.13.0](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.12.0...v1.13.0) (2026-08-18)
 
 ### 🐛 Bug Fixes

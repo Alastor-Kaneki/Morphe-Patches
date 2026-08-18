@@ -6,7 +6,7 @@ patches are added to this project and built together into one `.mpp` bundle.
 ## Included patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.13.0](https://github.com/Alastor-Kaneki/Morphe-Patches/releases/tag/v1.13.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;6 patches total
+> **[v1.13.1](https://github.com/Alastor-Kaneki/Morphe-Patches/releases/tag/v1.13.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;6 patches total
 <details open>
 <summary>📦 Suno&nbsp;&nbsp;•&nbsp;&nbsp;2 patches</summary>
 <br>
@@ -50,7 +50,7 @@ patches are added to this project and built together into one `.mpp` bundle.
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [Remove ads](#remove-ads) | Disables Pixilart's shared AdMob provider so banner, interstitial, and native ads do not load or display. |  |
+| [Remove ads](#remove-ads) | Removes Pixilart's native AdMob ads, injected web ads, and promoted/feed ad cards. |  |
 
 </details>
 

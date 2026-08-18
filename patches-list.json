@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.13.0",
+  "version": "1.13.1",
   "patches": [
     {
       "name": "Customize Suno branding",
@@ -170,7 +170,7 @@
     },
     {
       "name": "Remove ads",
-      "description": "Disables Pixilart's shared AdMob provider so banner, interstitial, and native ads do not load or display.",
+      "description": "Removes Pixilart's native AdMob ads, injected web ads, and promoted/feed ad cards.",
       "default": true,
       "dependencies": [],
       "compatiblePackages": [
