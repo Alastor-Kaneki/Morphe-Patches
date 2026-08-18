@@ -10,6 +10,18 @@ private val ADMOB_PROVIDER_CHECK = Regex(
     """var\s+isAvailable\s*=\s*function\s+isAvailable\(\)\s*\{\s*return\s+typeof\s+admob\s*!==\s*['\"]undefined['\"]\s*;\s*\}\s*;"""
 )
 
+private val NATIVE_ADS_DISABLED_STATE = Regex(
+    """disableAds\s*:\s*false"""
+)
+
+private val SHOW_BANNER_ACTION = Regex(
+    """showBanner\s*:\s*function\s+showBanner\s*\(\s*context\s*\)\s*\{"""
+)
+
+private val SHOW_INTERSTITIAL_ACTION = Regex(
+    """showInterstitial\s*:\s*function\s+showInterstitial\s*\(\s*context\s*\)\s*\{"""
+)
+
 private val WEB_AD_SCRIPT_ENTRY = Regex(
     """appendScripts\s*:\s*function\s*\(\)\s*\{\s*if\s*\(\s*this\.ads\.loaded\s*\)\s*return\s*;"""
 )
@@ -44,19 +56,18 @@ private fun replaceRegexExactlyOnce(
 /**
  * Removes all verified advertising paths from Pixilart 1.9.0.
  *
- * The app has three independent ad surfaces:
- * 1. Cordova AdMob banner/interstitial/native ads.
- * 2. Web ads injected by the bundled drawing UI (Freestar, NitroPay, Playwire and AdSense).
- * 3. Server-fed activity items with type == "ad", including promoted cards.
+ * Native advertising is blocked at multiple layers on purpose:
+ * 1. The AdMob provider reports itself unavailable.
+ * 2. Pixilart's ad state starts with disableAds enabled.
+ * 3. Banner and interstitial display actions hard-return before reaching the SDK.
  *
- * Whitespace-tolerant anchors are used because Morphe/resource processing can normalize
- * formatting in bundled JavaScript without changing the actual code.
+ * Web script ads and server-fed promoted/feed cards are also removed independently.
  */
 @Suppress("unused")
 val removeAdsPatch = resourcePatch(
     name = "Remove ads",
     description =
-        "Removes Pixilart's native AdMob ads, injected web ads, and promoted/feed ad cards.",
+        "Hard-disables Pixilart native banner/interstitial ads, injected web ads, and promoted/feed ad cards.",
     default = true
 ) {
     compatibleWith(PIXILART)
@@ -78,6 +89,27 @@ val removeAdsPatch = resourcePatch(
                   };
             """.trimIndent(),
             label = "AdMob provider"
+        )
+
+        source = replaceRegexExactlyOnce(
+            source = source,
+            pattern = NATIVE_ADS_DISABLED_STATE,
+            replacement = "disableAds: true",
+            label = "native-ad disable state"
+        )
+
+        source = replaceRegexExactlyOnce(
+            source = source,
+            pattern = SHOW_BANNER_ACTION,
+            replacement = "showBanner: function showBanner(context) { return;",
+            label = "banner display action"
+        )
+
+        source = replaceRegexExactlyOnce(
+            source = source,
+            pattern = SHOW_INTERSTITIAL_ACTION,
+            replacement = "showInterstitial: function showInterstitial(context) { return;",
+            label = "interstitial display action"
         )
 
         source = replaceRegexExactlyOnce(
