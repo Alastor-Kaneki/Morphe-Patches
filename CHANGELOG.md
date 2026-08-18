@@ -1,3 +1,9 @@
+## [1.13.2](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.13.1...v1.13.2) (2026-08-18)
+
+### 🐛 Bug Fixes
+
+* **pixilart:** make ad hooks whitespace tolerant ([965421b](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/965421b8053112daedb57ada224551965d677c0b))
+
 ## [1.13.1](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.13.0...v1.13.1) (2026-08-18)
 
 ### 🐛 Bug Fixes
