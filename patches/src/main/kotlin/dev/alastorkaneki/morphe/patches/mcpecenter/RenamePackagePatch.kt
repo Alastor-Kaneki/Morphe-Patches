@@ -6,9 +6,8 @@ import app.morphe.patcher.patch.Option
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.patch.stringOption
-import app.morphe.util.asSequence
-import app.morphe.util.getReference
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.StringReference
 import dev.alastorkaneki.morphe.patches.mcpecenter.Constants.MCPE_CENTER
 import dev.alastorkaneki.morphe.patches.mcpecenter.Constants.ORIGINAL_FILE_PROVIDER
@@ -51,8 +50,9 @@ val renamePackagePatch = resourcePatch(
 
             SendToMinecraft33Fingerprint.method.apply {
                 instructions.forEachIndexed { index, instruction ->
-                    val oldValue = instruction.getReference<StringReference>()?.string
-                        ?: return@forEachIndexed
+                    val oldValue =
+                        ((instruction as? ReferenceInstruction)?.reference as? StringReference)?.string
+                            ?: return@forEachIndexed
                     val replacement = when (oldValue) {
                         ORIGINAL_PACKAGE -> newPackageName
                         ORIGINAL_FILE_PROVIDER -> newProvider
@@ -87,50 +87,47 @@ val renamePackagePatch = resourcePatch(
             // AndroidX generates an app-specific dynamic-receiver permission. Keep its
             // declaration and matching uses-permission in sync with the new package.
             listOf("permission", "uses-permission").forEach { tagName ->
-                document.getElementsByTagName(tagName)
-                    .asSequence()
-                    .mapNotNull { it as? Element }
-                    .forEach { element ->
-                        val oldName = element.getAttribute("android:name")
-                        if (oldName.isNotEmpty()) {
-                            element.setAttribute(
-                                "android:name",
-                                replacePackagePrefix(oldName)
-                            )
-                        }
-                    }
-            }
-
-            // Provider authorities must be globally unique, especially when the original
-            // and a renamed clone are installed side-by-side.
-            document.getElementsByTagName("provider")
-                .asSequence()
-                .mapNotNull { it as? Element }
-                .forEach { provider ->
-                    val authorities = provider.getAttribute("android:authorities")
-                    if (authorities.isNotEmpty()) {
-                        provider.setAttribute(
-                            "android:authorities",
-                            authorities.split(';')
-                                .joinToString(";") { replacePackagePrefix(it) }
-                        )
-                    }
-                }
-
-            // Update only app-owned intent actions. Component class names remain fully
-            // qualified to the original Java package and are intentionally left untouched.
-            document.getElementsByTagName("action")
-                .asSequence()
-                .mapNotNull { it as? Element }
-                .forEach { action ->
-                    val oldName = action.getAttribute("android:name")
-                    if (oldName.startsWith("$ORIGINAL_PACKAGE.")) {
-                        action.setAttribute(
+                val nodes = document.getElementsByTagName(tagName)
+                for (index in 0 until nodes.length) {
+                    val element = nodes.item(index) as? Element ?: continue
+                    val oldName = element.getAttribute("android:name")
+                    if (oldName.isNotEmpty()) {
+                        element.setAttribute(
                             "android:name",
                             replacePackagePrefix(oldName)
                         )
                     }
                 }
+            }
+
+            // Provider authorities must be globally unique, especially when the original
+            // and a renamed clone are installed side-by-side.
+            val providers = document.getElementsByTagName("provider")
+            for (index in 0 until providers.length) {
+                val provider = providers.item(index) as? Element ?: continue
+                val authorities = provider.getAttribute("android:authorities")
+                if (authorities.isNotEmpty()) {
+                    provider.setAttribute(
+                        "android:authorities",
+                        authorities.split(';')
+                            .joinToString(";") { replacePackagePrefix(it) }
+                    )
+                }
+            }
+
+            // Update only app-owned intent actions. Component class names remain fully
+            // qualified to the original Java package and are intentionally left untouched.
+            val actions = document.getElementsByTagName("action")
+            for (index in 0 until actions.length) {
+                val action = actions.item(index) as? Element ?: continue
+                val oldName = action.getAttribute("android:name")
+                if (oldName.startsWith("$ORIGINAL_PACKAGE.")) {
+                    action.setAttribute(
+                        "android:name",
+                        replacePackagePrefix(oldName)
+                    )
+                }
+            }
         }
     }
 }
