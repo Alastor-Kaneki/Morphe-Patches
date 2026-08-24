@@ -75,18 +75,17 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Reassemble relay source
-        run: |
-          cat .tmp-relay/source.part* | base64 -d > relay-source.zip
-          unzip -q relay-source.zip
-
-      - name: Build relay APK
+      - name: Build relay APK and capture diagnostics
         id: relay
-        working-directory: MCPE_Addon_Relay
         shell: bash
         run: |
           set +e
-          gradle :app:assembleDebug --stacktrace > ../relay-build.log 2>&1
+          rm -rf MCPE_Addon_Relay relay-build.log
+          {
+            unzip -q .tmp-relay/relay-source.zip
+            cd MCPE_Addon_Relay
+            gradle :app:assembleDebug --stacktrace
+          } > relay-build.log 2>&1
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
@@ -95,7 +94,7 @@ jobs:
         shell: bash
         run: |
           rm -f MCPE-Addon-Relay-debug.apk relay-build-failure.log
-          if [ "${{ steps.relay.outputs.exit_code }}" = "0" ]; then
+          if [ "${{ steps.relay.outputs.exit_code }}" = "0" ] && [ -f MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk ]; then
             cp MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk MCPE-Addon-Relay-debug.apk
           else
             cp relay-build.log relay-build-failure.log
@@ -106,7 +105,7 @@ jobs:
           git commit -m "chore(ci): temporary relay build result [skip ci]"
           git push origin HEAD:main
 
-      - name: Purge relay artifacts and old temp branch
+      - name: Purge relay Actions artifacts and old temp branch
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
