@@ -1,119 +1,18 @@
-name: Temporary MCPE Addon Relay Stable Immersive Build
+name: Temporary Relay Stable Immersive Artifact Cleanup
 
 on:
   pull_request:
     branches: [ main ]
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
-  relay-build:
+  cleanup:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: android-actions/setup-android@v3
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
-
-      - name: Reconstruct relay source
-        run: |
-          cat .tmp-relay/source.part* | base64 -d > relay-source.zip
-          unzip -t relay-source.zip
-          unzip -q relay-source.zip
-
-      - name: Apply stable Shizuku, icon and immersive fixes
-        shell: bash
-        run: |
-          set -e
-          RES=MCPE_Addon_Relay/app/src/main/res
-          mkdir -p "$RES/drawable" "$RES/mipmap-anydpi" "$RES/mipmap-anydpi-v26"
-
-          cat > "$RES/drawable/ic_launcher_foreground.xml" <<'EOF'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#A855F7" android:pathData="M19,31 L43,31 L51,39 L89,39 L89,78 Q89,84 83,84 L25,84 Q19,84 19,78 Z" />
-              <path android:fillColor="#F43F5E" android:pathData="M57,47 L73,61 L57,75 L57,66 L39,66 L39,56 L57,56 Z" />
-          </vector>
-          EOF
-          cat > "$RES/drawable/ic_launcher_background.xml" <<'EOF'
-          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle"><solid android:color="#0A0A0D" /></shape>
-          EOF
-          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" <<'EOF'
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@drawable/ic_launcher_background"/><foreground android:drawable="@drawable/ic_launcher_foreground"/></adaptive-icon>
-          EOF
-          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
-          cat > "$RES/mipmap-anydpi/ic_launcher.xml" <<'EOF'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#0A0A0D" android:pathData="M0,0 H108 V108 H0 Z"/><path android:fillColor="#A855F7" android:pathData="M19,31 L43,31 L51,39 L89,39 L89,78 Q89,84 83,84 L25,84 Q19,84 19,78 Z"/><path android:fillColor="#F43F5E" android:pathData="M57,47 L73,61 L57,75 L57,66 L39,66 L39,56 L57,56 Z"/>
-          </vector>
-          EOF
-          cp "$RES/mipmap-anydpi/ic_launcher.xml" "$RES/mipmap-anydpi/ic_launcher_round.xml"
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          manifest = Path('MCPE_Addon_Relay/app/src/main/AndroidManifest.xml')
-          m = manifest.read_text()
-          if 'moe.shizuku.manager.permission.API_V23' not in m:
-              m = m.replace('<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />', '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />')
-          m = m.replace('<application\n        android:allowBackup="true"', '<application\n        android:allowBackup="true"\n        android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"')
-          if 'rikka.shizuku.ShizukuProvider' not in m:
-              m = m.replace('android:theme="@style/AppTheme">', 'android:theme="@style/AppTheme">\n\n        <provider\n            android:name="rikka.shizuku.ShizukuProvider"\n            android:authorities="${applicationId}.shizuku"\n            android:multiprocess="false"\n            android:enabled="true"\n            android:exported="true"\n            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />')
-          manifest.write_text(m)
-
-          p = Path('MCPE_Addon_Relay/app/src/main/java/dev/alastorkaneki/mcpeaddonrelay/MainActivity.java')
-          s = p.read_text()
-          s = s.replace('import android.os.Bundle;', 'import android.os.Bundle;\nimport android.os.Handler;\nimport android.os.Looper;')
-          s = s.replace('import android.view.Gravity;', 'import android.view.Gravity;\nimport android.view.WindowInsets;\nimport android.view.WindowInsetsController;\nimport android.view.WindowManager;')
-
-          old_oncreate = '''        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        setContentView(buildUi());\n        refreshStatus();'''
-          new_oncreate = '''        setContentView(buildUi());\n        applyImmersiveMode();\n        try {\n            Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        } catch (Throwable ignored) {\n        }\n        new Handler(Looper.getMainLooper()).postDelayed(this::refreshStatus, 500);'''
-          if old_oncreate not in s:
-              raise SystemExit('original onCreate block not found')
-          s = s.replace(old_oncreate, new_oncreate, 1)
-
-          old_destroy = '''        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);\n        worker.shutdownNow();'''
-          new_destroy = '''        try {\n            Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);\n        } catch (Throwable ignored) {\n        }\n        worker.shutdownNow();'''
-          s = s.replace(old_destroy, new_destroy, 1)
-
-          old_refresh = '''        runOnUiThread(() -> {\n            if (!ShizukuShell.binderAlive()) {'''
-          new_refresh = '''        runOnUiThread(() -> {\n            if (isFinishing() || isDestroyed() || shizukuStatus == null || destinationStatus == null) return;\n            if (!ShizukuShell.binderAlive()) {'''
-          if old_refresh not in s:
-              raise SystemExit('refreshStatus block not found')
-          s = s.replace(old_refresh, new_refresh, 1)
-
-          anchor = '''    @Override\n    protected void onDestroy() {'''
-          extra = '''    @Override\n    protected void onResume() {\n        super.onResume();\n        applyImmersiveMode();\n        new Handler(Looper.getMainLooper()).postDelayed(this::refreshStatus, 250);\n    }\n\n    @Override\n    public void onWindowFocusChanged(boolean hasFocus) {\n        super.onWindowFocusChanged(hasFocus);\n        if (hasFocus) applyImmersiveMode();\n    }\n\n    private void applyImmersiveMode() {\n        try {\n            if (Build.VERSION.SDK_INT >= 28) {\n                WindowManager.LayoutParams attrs = getWindow().getAttributes();\n                attrs.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;\n                getWindow().setAttributes(attrs);\n            }\n            if (Build.VERSION.SDK_INT >= 30) {\n                getWindow().setDecorFitsSystemWindows(false);\n                WindowInsetsController controller = getWindow().getInsetsController();\n                if (controller != null) {\n                    controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);\n                    controller.hide(WindowInsets.Type.systemBars());\n                }\n            } else {\n                getWindow().getDecorView().setSystemUiVisibility(\n                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY\n                                | View.SYSTEM_UI_FLAG_FULLSCREEN\n                                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION\n                                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE\n                                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN\n                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);\n            }\n        } catch (Throwable ignored) {\n        }\n    }\n\n'''
-          if anchor not in s:
-              raise SystemExit('onDestroy anchor missing')
-          s = s.replace(anchor, extra + anchor, 1)
-
-          # Make permission requests non-fatal too.
-          s = s.replace('        Shizuku.requestPermission(SHIZUKU_REQUEST);', '        try { Shizuku.requestPermission(SHIZUKU_REQUEST); } catch (Throwable e) { toast("Shizuku permission request failed"); }')
-
-          p.write_text(s)
-          check = p.read_text()
-          if 'addBinderReceivedListenerSticky' in check or 'addBinderDeadListener' in check:
-              raise SystemExit('unsafe binder listener unexpectedly present')
-          for required in ['postDelayed(this::refreshStatus, 500)', 'WindowInsets.Type.systemBars()', 'SYSTEM_UI_FLAG_IMMERSIVE_STICKY', 'isDestroyed()']:
-              if required not in check:
-                  raise SystemExit('missing required stable/immersive code: ' + required)
-          PY
-
-      - name: Build relay APK
-        working-directory: MCPE_Addon_Relay
-        run: gradle :app:assembleDebug --stacktrace
-
-      - name: Upload relay APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: MCPE-Addon-Relay-stable-immersive-debug
-          path: MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 1
+      - name: Delete stable immersive APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/9532058919"
