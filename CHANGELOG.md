@@ -1,3 +1,11 @@
+## [1.14.1](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.14.0...v1.14.1) (2026-08-24)
+
+### 🐛 Bug Fixes
+
+* **mcpe-center:** make package rename fingerprint order-independent ([02bc171](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/02bc171c95718f07b043eccab385157446dd2738))
+* **release:** accept spaced Gradle version property ([b81f280](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/b81f280d7818755496ea9fb06cc8dea174301817))
+* **release:** auto-update latest bundle metadata ([8277193](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/8277193070025e922367de605cfe7e958bf7d43e))
+
 ## [1.14.0](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.13.4...v1.14.0) (2026-08-24)
 
 ### 🐛 Bug Fixes
