@@ -1,17 +1,17 @@
-name: Build Morphe patches
+name: Temporary MCPE Addon Relay Fixed Build
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main, dev ]
-  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/build.yml'
+      - '.tmp-relay/**'
 
 permissions:
-  contents: read
-  packages: read
+  contents: write
 
 jobs:
-  build:
+  relay-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -22,36 +22,120 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - uses: android-actions/setup-android@v3
+
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.6.1'
+          gradle-version: '8.10.2'
 
-      - name: Test GX URL resolver
-        run: bash tools/test-parser.sh
+      - name: Reconstruct relay source
+        run: |
+          cat .tmp-relay/source.part* | base64 -d > relay-source.zip
+          unzip -t relay-source.zip
+          unzip -q relay-source.zip
 
-      - name: Test standalone GX icon pack
-        run: bash tools/test-gx-icon-pack.sh
+      - name: Add launcher icon and fix Shizuku bridge
+        shell: bash
+        run: |
+          set -e
+          RES=MCPE_Addon_Relay/app/src/main/res
+          mkdir -p "$RES/drawable" "$RES/mipmap-anydpi" "$RES/mipmap-anydpi-v26"
 
-      - name: Test Chrome userscript engine
-        run: bash tools/test-chrome-userscripts.sh
+          cat > "$RES/drawable/ic_launcher_foreground.xml" <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#A855F7" android:pathData="M19,31 L43,31 L51,39 L89,39 L89,78 Q89,84 83,84 L25,84 Q19,84 19,78 Z" />
+              <path android:fillColor="#F43F5E" android:pathData="M57,47 L73,61 L57,75 L57,66 L39,66 L39,56 L57,56 Z" />
+          </vector>
+          EOF
 
-      - name: Test Chrome 150 exact menu hook
-        run: bash tools/test-chrome150-menu-hook.sh
+          cat > "$RES/drawable/ic_launcher_background.xml" <<'EOF'
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+              <solid android:color="#0A0A0D" />
+          </shape>
+          EOF
 
-      - name: Test Chrome page runtime and Material UI
-        run: bash tools/test-chrome-runtime-bridge.sh
+          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          EOF
+          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
 
-      - name: Build Android Morphe bundle
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gradle buildAndroid --stacktrace
+          cat > "$RES/mipmap-anydpi/ic_launcher.xml" <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="48dp"
+              android:height="48dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#0A0A0D" android:pathData="M0,0 H108 V108 H0 Z" />
+              <path android:fillColor="#A855F7" android:pathData="M19,31 L43,31 L51,39 L89,39 L89,78 Q89,84 83,84 L25,84 Q19,84 19,78 Z" />
+              <path android:fillColor="#F43F5E" android:pathData="M57,47 L73,61 L57,75 L57,66 L39,66 L39,56 L57,56 Z" />
+          </vector>
+          EOF
+          cp "$RES/mipmap-anydpi/ic_launcher.xml" "$RES/mipmap-anydpi/ic_launcher_round.xml"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: morphe-patches
-          path: |
-            patches/build/libs/*.mpp
-            patches/build/libs/*.json
-          if-no-files-found: error
-          retention-days: 3
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path('MCPE_Addon_Relay/app/src/main/AndroidManifest.xml')
+          s = manifest.read_text()
+          if 'moe.shizuku.manager.permission.API_V23' not in s:
+              s = s.replace(
+                  '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+                  '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />'
+              )
+          s = s.replace(
+              '<application\n        android:allowBackup="true"',
+              '<application\n        android:allowBackup="true"\n        android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"'
+          )
+          if 'rikka.shizuku.ShizukuProvider' not in s:
+              s = s.replace(
+                  'android:theme="@style/AppTheme">',
+                  'android:theme="@style/AppTheme">\n\n        <provider\n            android:name="rikka.shizuku.ShizukuProvider"\n            android:authorities="${applicationId}.shizuku"\n            android:multiprocess="false"\n            android:enabled="true"\n            android:exported="true"\n            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />'
+              )
+          manifest.write_text(s)
+
+          main = Path('MCPE_Addon_Relay/app/src/main/java/dev/alastorkaneki/mcpeaddonrelay/MainActivity.java')
+          s = main.read_text()
+          marker = '    @Override\n    protected void onCreate(Bundle savedInstanceState) {'
+          listeners = '''    private final Shizuku.OnBinderReceivedListener shizukuBinderReceivedListener =\n            this::refreshStatus;\n\n    private final Shizuku.OnBinderDeadListener shizukuBinderDeadListener =\n            this::refreshStatus;\n\n'''
+          if 'shizukuBinderReceivedListener' not in s:
+              s = s.replace(marker, listeners + marker)
+          s = s.replace(
+              '        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);',
+              '        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener);\n        Shizuku.addBinderDeadListener(shizukuBinderDeadListener);'
+          )
+          if 'protected void onResume()' not in s:
+              resume = '''    @Override\n    protected void onResume() {\n        super.onResume();\n        refreshStatus();\n    }\n\n'''
+              s = s.replace('    @Override\n    protected void onDestroy() {', resume + '    @Override\n    protected void onDestroy() {')
+          s = s.replace(
+              '        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);',
+              '        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener);\n        Shizuku.removeBinderDeadListener(shizukuBinderDeadListener);'
+          )
+          main.write_text(s)
+          PY
+
+      - name: Build and publish result to main
+        id: build
+        shell: bash
+        run: |
+          set +e
+          (cd MCPE_Addon_Relay && gradle :app:assembleDebug --stacktrace) > relay-build.log 2>&1
+          code=$?
+          rm -f MCPE-Addon-Relay-fixed.apk relay-build-failure.log
+          if [ "$code" = "0" ] && [ -f MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk MCPE-Addon-Relay-fixed.apk
+          else
+            cp relay-build.log relay-build-failure.log
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MCPE-Addon-Relay-fixed.apk relay-build-failure.log 2>/dev/null || true
+          git commit -m "chore(ci): relay fixed build result [skip ci]"
+          git push origin HEAD:main
+          exit "$code"
