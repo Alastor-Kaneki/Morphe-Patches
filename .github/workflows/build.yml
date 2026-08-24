@@ -1,4 +1,4 @@
-name: Temporary MCPE Addon Relay Fixed Build
+name: Temporary MCPE Addon Relay Crashfix Build
 
 on:
   pull_request:
@@ -31,7 +31,7 @@ jobs:
           unzip -t relay-source.zip
           unzip -q relay-source.zip
 
-      - name: Add launcher icon and fix Shizuku bridge
+      - name: Add launcher icon and Shizuku bridge
         shell: bash
         run: |
           set -e
@@ -117,6 +117,35 @@ jobs:
           main.write_text(s)
           PY
 
+      - name: Fix Shizuku startup callback race
+        shell: bash
+        run: |
+          set -e
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('MCPE_Addon_Relay/app/src/main/java/dev/alastorkaneki/mcpeaddonrelay/MainActivity.java')
+          s = p.read_text()
+          old = '''        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener);\n        Shizuku.addBinderDeadListener(shizukuBinderDeadListener);\n        setContentView(buildUi());\n        refreshStatus();'''
+          new = '''        setContentView(buildUi());\n        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener);\n        Shizuku.addBinderDeadListener(shizukuBinderDeadListener);\n        refreshStatus();'''
+          if old not in s:
+              raise SystemExit('Expected onCreate Shizuku registration block not found')
+          s = s.replace(old, new, 1)
+          old_refresh = '''        runOnUiThread(() -> {\n            if (!ShizukuShell.binderAlive()) {'''
+          new_refresh = '''        runOnUiThread(() -> {\n            if (shizukuStatus == null || destinationStatus == null) return;\n            if (!ShizukuShell.binderAlive()) {'''
+          if old_refresh not in s:
+              raise SystemExit('Expected refreshStatus block not found')
+          s = s.replace(old_refresh, new_refresh, 1)
+          p.write_text(s)
+
+          check = p.read_text()
+          ui = check.index('setContentView(buildUi());')
+          sticky = check.index('Shizuku.addBinderReceivedListenerSticky')
+          if ui > sticky:
+              raise SystemExit('Sticky listener is still registered before UI setup')
+          if 'shizukuStatus == null || destinationStatus == null' not in check:
+              raise SystemExit('Null guard missing')
+          PY
+
       - name: Build relay APK
         working-directory: MCPE_Addon_Relay
         run: gradle :app:assembleDebug --stacktrace
@@ -124,7 +153,7 @@ jobs:
       - name: Upload relay APK
         uses: actions/upload-artifact@v4
         with:
-          name: MCPE-Addon-Relay-fixed-debug
+          name: MCPE-Addon-Relay-crashfix-debug
           path: MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 1
