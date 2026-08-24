@@ -1,4 +1,4 @@
-name: Temporary MCPE Addon Relay Icon Build
+name: Temporary MCPE Addon Relay Fixed Build
 
 on:
   pull_request:
@@ -31,7 +31,7 @@ jobs:
           unzip -t relay-source.zip
           unzip -q relay-source.zip
 
-      - name: Add launcher icon
+      - name: Add launcher icon and fix Shizuku bridge
         shell: bash
         run: |
           set -e
@@ -78,10 +78,43 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('MCPE_Addon_Relay/app/src/main/AndroidManifest.xml')
-          s = p.read_text()
-          s = s.replace('<application\n        android:allowBackup="true"', '<application\n        android:allowBackup="true"\n        android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"')
-          p.write_text(s)
+
+          manifest = Path('MCPE_Addon_Relay/app/src/main/AndroidManifest.xml')
+          s = manifest.read_text()
+          if 'moe.shizuku.manager.permission.API_V23' not in s:
+              s = s.replace(
+                  '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+                  '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />'
+              )
+          s = s.replace(
+              '<application\n        android:allowBackup="true"',
+              '<application\n        android:allowBackup="true"\n        android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"'
+          )
+          if 'rikka.shizuku.ShizukuProvider' not in s:
+              s = s.replace(
+                  'android:theme="@style/AppTheme">',
+                  'android:theme="@style/AppTheme">\n\n        <provider\n            android:name="rikka.shizuku.ShizukuProvider"\n            android:authorities="${applicationId}.shizuku"\n            android:multiprocess="false"\n            android:enabled="true"\n            android:exported="true"\n            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />'
+              )
+          manifest.write_text(s)
+
+          main = Path('MCPE_Addon_Relay/app/src/main/java/dev/alastorkaneki/mcpeaddonrelay/MainActivity.java')
+          s = main.read_text()
+          marker = '    @Override\n    protected void onCreate(Bundle savedInstanceState) {'
+          listeners = '''    private final Shizuku.OnBinderReceivedListener shizukuBinderReceivedListener =\n            this::refreshStatus;\n\n    private final Shizuku.OnBinderDeadListener shizukuBinderDeadListener =\n            this::refreshStatus;\n\n'''
+          if 'shizukuBinderReceivedListener' not in s:
+              s = s.replace(marker, listeners + marker)
+          s = s.replace(
+              '        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);',
+              '        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener);\n        Shizuku.addBinderDeadListener(shizukuBinderDeadListener);'
+          )
+          if 'protected void onResume()' not in s:
+              resume = '''    @Override\n    protected void onResume() {\n        super.onResume();\n        refreshStatus();\n    }\n\n'''
+              s = s.replace('    @Override\n    protected void onDestroy() {', resume + '    @Override\n    protected void onDestroy() {')
+          s = s.replace(
+              '        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);',
+              '        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener);\n        Shizuku.removeBinderDeadListener(shizukuBinderDeadListener);'
+          )
+          main.write_text(s)
           PY
 
       - name: Build relay APK
@@ -91,9 +124,9 @@ jobs:
       - name: Upload relay APK
         uses: actions/upload-artifact@v4
         with:
-          name: MCPE-Addon-Relay-icon-debug
+          name: MCPE-Addon-Relay-fixed-debug
           path: MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 1
 
-# trigger
+# trigger fixed rebuild
