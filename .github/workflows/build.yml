@@ -1,159 +1,18 @@
-name: Temporary MCPE Addon Relay Crashfix Build
+name: Temporary Relay Crashfix Artifact Cleanup
 
 on:
   pull_request:
     branches: [ main ]
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
-  relay-build:
+  cleanup:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - uses: android-actions/setup-android@v3
-
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
-
-      - name: Reconstruct relay source
-        run: |
-          cat .tmp-relay/source.part* | base64 -d > relay-source.zip
-          unzip -t relay-source.zip
-          unzip -q relay-source.zip
-
-      - name: Add launcher icon and Shizuku bridge
-        shell: bash
-        run: |
-          set -e
-          RES=MCPE_Addon_Relay/app/src/main/res
-          mkdir -p "$RES/drawable" "$RES/mipmap-anydpi" "$RES/mipmap-anydpi-v26"
-
-          cat > "$RES/drawable/ic_launcher_foreground.xml" <<'EOF'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path android:fillColor="#A855F7" android:pathData="M19,31 L43,31 L51,39 L89,39 L89,78 Q89,84 83,84 L25,84 Q19,84 19,78 Z" />
-              <path android:fillColor="#F43F5E" android:pathData="M57,47 L73,61 L57,75 L57,66 L39,66 L39,56 L57,56 Z" />
-          </vector>
-          EOF
-
-          cat > "$RES/drawable/ic_launcher_background.xml" <<'EOF'
-          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-              <solid android:color="#0A0A0D" />
-          </shape>
-          EOF
-
-          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" <<'EOF'
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@drawable/ic_launcher_background" />
-              <foreground android:drawable="@drawable/ic_launcher_foreground" />
-          </adaptive-icon>
-          EOF
-          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
-
-          cat > "$RES/mipmap-anydpi/ic_launcher.xml" <<'EOF'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="48dp"
-              android:height="48dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path android:fillColor="#0A0A0D" android:pathData="M0,0 H108 V108 H0 Z" />
-              <path android:fillColor="#A855F7" android:pathData="M19,31 L43,31 L51,39 L89,39 L89,78 Q89,84 83,84 L25,84 Q19,84 19,78 Z" />
-              <path android:fillColor="#F43F5E" android:pathData="M57,47 L73,61 L57,75 L57,66 L39,66 L39,56 L57,56 Z" />
-          </vector>
-          EOF
-          cp "$RES/mipmap-anydpi/ic_launcher.xml" "$RES/mipmap-anydpi/ic_launcher_round.xml"
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          manifest = Path('MCPE_Addon_Relay/app/src/main/AndroidManifest.xml')
-          s = manifest.read_text()
-          if 'moe.shizuku.manager.permission.API_V23' not in s:
-              s = s.replace(
-                  '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
-                  '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />'
-              )
-          s = s.replace(
-              '<application\n        android:allowBackup="true"',
-              '<application\n        android:allowBackup="true"\n        android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"'
-          )
-          if 'rikka.shizuku.ShizukuProvider' not in s:
-              s = s.replace(
-                  'android:theme="@style/AppTheme">',
-                  'android:theme="@style/AppTheme">\n\n        <provider\n            android:name="rikka.shizuku.ShizukuProvider"\n            android:authorities="${applicationId}.shizuku"\n            android:multiprocess="false"\n            android:enabled="true"\n            android:exported="true"\n            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />'
-              )
-          manifest.write_text(s)
-
-          main = Path('MCPE_Addon_Relay/app/src/main/java/dev/alastorkaneki/mcpeaddonrelay/MainActivity.java')
-          s = main.read_text()
-          marker = '    @Override\n    protected void onCreate(Bundle savedInstanceState) {'
-          listeners = '''    private final Shizuku.OnBinderReceivedListener shizukuBinderReceivedListener =\n            this::refreshStatus;\n\n    private final Shizuku.OnBinderDeadListener shizukuBinderDeadListener =\n            this::refreshStatus;\n\n'''
-          if 'shizukuBinderReceivedListener' not in s:
-              s = s.replace(marker, listeners + marker)
-          s = s.replace(
-              '        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);',
-              '        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener);\n        Shizuku.addBinderDeadListener(shizukuBinderDeadListener);'
-          )
-          if 'protected void onResume()' not in s:
-              resume = '''    @Override\n    protected void onResume() {\n        super.onResume();\n        refreshStatus();\n    }\n\n'''
-              s = s.replace('    @Override\n    protected void onDestroy() {', resume + '    @Override\n    protected void onDestroy() {')
-          s = s.replace(
-              '        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);',
-              '        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener);\n        Shizuku.removeBinderDeadListener(shizukuBinderDeadListener);'
-          )
-          main.write_text(s)
-          PY
-
-      - name: Fix Shizuku startup callback race
-        shell: bash
-        run: |
-          set -e
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('MCPE_Addon_Relay/app/src/main/java/dev/alastorkaneki/mcpeaddonrelay/MainActivity.java')
-          s = p.read_text()
-          old = '''        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener);\n        Shizuku.addBinderDeadListener(shizukuBinderDeadListener);\n        setContentView(buildUi());\n        refreshStatus();'''
-          new = '''        setContentView(buildUi());\n        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener);\n        Shizuku.addBinderDeadListener(shizukuBinderDeadListener);\n        refreshStatus();'''
-          if old not in s:
-              raise SystemExit('Expected onCreate Shizuku registration block not found')
-          s = s.replace(old, new, 1)
-          old_refresh = '''        runOnUiThread(() -> {\n            if (!ShizukuShell.binderAlive()) {'''
-          new_refresh = '''        runOnUiThread(() -> {\n            if (shizukuStatus == null || destinationStatus == null) return;\n            if (!ShizukuShell.binderAlive()) {'''
-          if old_refresh not in s:
-              raise SystemExit('Expected refreshStatus block not found')
-          s = s.replace(old_refresh, new_refresh, 1)
-          p.write_text(s)
-
-          check = p.read_text()
-          ui = check.index('setContentView(buildUi());')
-          sticky = check.index('Shizuku.addBinderReceivedListenerSticky')
-          if ui > sticky:
-              raise SystemExit('Sticky listener is still registered before UI setup')
-          if 'shizukuStatus == null || destinationStatus == null' not in check:
-              raise SystemExit('Null guard missing')
-          PY
-
-      - name: Build relay APK
-        working-directory: MCPE_Addon_Relay
-        run: gradle :app:assembleDebug --stacktrace
-
-      - name: Upload relay APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: MCPE-Addon-Relay-crashfix-debug
-          path: MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 1
+      - name: Delete relay crashfix artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/9523124939"
