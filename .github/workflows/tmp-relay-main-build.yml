@@ -62,3 +62,4 @@ jobs:
       - name: Fail job when build failed
         if: steps.build.outputs.exit_code != '0'
         run: exit 1
+# trigger after workflow exists
