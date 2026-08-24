@@ -1,18 +1,21 @@
-name: Temporary Relay Artifact Cleanup
+name: Temporary Relay GitHub Cleanup
 
 on:
   pull_request:
     branches: [ main ]
 
 permissions:
-  actions: write
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Delete downloaded relay artifact
+      - name: Close temp PR and delete temp branches
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/9519177908"
+        run: |
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/25" -f state=closed
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/tmp/relay-pr-build-20260824"
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/tmp/mcpe-addon-relay-build-20260824" || true
