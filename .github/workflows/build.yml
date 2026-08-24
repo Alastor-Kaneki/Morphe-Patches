@@ -1,64 +1,14 @@
-name: Build Morphe patches
+name: Temporary MCPE Addon Relay PR Build
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [ main, dev ]
   pull_request:
+    branches: [ main ]
 
 permissions:
-  contents: write
-  packages: read
-  actions: write
+  contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.6.1'
-
-      - name: Test GX URL resolver
-        run: bash tools/test-parser.sh
-
-      - name: Test standalone GX icon pack
-        run: bash tools/test-gx-icon-pack.sh
-
-      - name: Test Chrome userscript engine
-        run: bash tools/test-chrome-userscripts.sh
-
-      - name: Test Chrome 150 exact menu hook
-        run: bash tools/test-chrome150-menu-hook.sh
-
-      - name: Test Chrome page runtime and Material UI
-        run: bash tools/test-chrome-runtime-bridge.sh
-
-      - name: Build Android Morphe bundle
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gradle buildAndroid --stacktrace
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: morphe-patches
-          path: |
-            patches/build/libs/*.mpp
-            patches/build/libs/*.json
-          if-no-files-found: error
-          retention-days: 3
-
   relay-build:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -75,48 +25,17 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Build relay APK and capture diagnostics
-        id: relay
-        shell: bash
-        run: |
-          set +e
-          rm -rf MCPE_Addon_Relay relay-build.log
-          {
-            unzip -q .tmp-relay/relay-source.zip
-            cd MCPE_Addon_Relay
-            gradle :app:assembleDebug --stacktrace
-          } > relay-build.log 2>&1
-          code=$?
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
-          exit 0
+      - name: Extract relay source
+        run: unzip -q .tmp-relay/relay-source.zip
 
-      - name: Publish relay result
-        shell: bash
-        run: |
-          rm -f MCPE-Addon-Relay-debug.apk relay-build-failure.log
-          if [ "${{ steps.relay.outputs.exit_code }}" = "0" ] && [ -f MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk MCPE-Addon-Relay-debug.apk
-          else
-            cp relay-build.log relay-build-failure.log
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A -- MCPE-Addon-Relay-debug.apk relay-build-failure.log
-          git commit -m "chore(ci): temporary relay build result [skip ci]"
-          git push origin HEAD:main
+      - name: Build relay APK
+        working-directory: MCPE_Addon_Relay
+        run: gradle :app:assembleDebug --stacktrace
 
-      - name: Purge relay Actions artifacts and old temp branch
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
-            --jq '.artifacts[] | select(.name == "MCPE-Addon-Relay-debug" or .name == "mcpe-addon-relay-debug") | .id' \
-          | while read -r id; do
-              [ -n "$id" ] && gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}"
-            done
-          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/tmp/mcpe-addon-relay-build-20260824" || true
-
-      - name: Fail relay job when build failed
-        if: steps.relay.outputs.exit_code != '0'
-        run: exit 1
+      - name: Upload relay APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCPE-Addon-Relay-debug
+          path: MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 1
