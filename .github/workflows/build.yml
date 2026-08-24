@@ -1,144 +1,18 @@
-name: Temporary MCPE Addon Relay Immersive Build
+name: Temporary Relay Immersive Artifact Cleanup
 
 on:
   pull_request:
     branches: [ main ]
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
-  relay-build:
+  cleanup:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - uses: android-actions/setup-android@v3
-
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
-
-      - name: Reconstruct relay source
-        run: |
-          cat .tmp-relay/source.part* | base64 -d > relay-source.zip
-          unzip -t relay-source.zip
-          unzip -q relay-source.zip
-
-      - name: Apply launcher, Shizuku, crash and immersive fixes
-        shell: bash
-        run: |
-          set -e
-          RES=MCPE_Addon_Relay/app/src/main/res
-          mkdir -p "$RES/drawable" "$RES/mipmap-anydpi" "$RES/mipmap-anydpi-v26"
-
-          cat > "$RES/drawable/ic_launcher_foreground.xml" <<'EOF'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp" android:height="108dp"
-              android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#A855F7" android:pathData="M19,31 L43,31 L51,39 L89,39 L89,78 Q89,84 83,84 L25,84 Q19,84 19,78 Z" />
-              <path android:fillColor="#F43F5E" android:pathData="M57,47 L73,61 L57,75 L57,66 L39,66 L39,56 L57,56 Z" />
-          </vector>
-          EOF
-
-          cat > "$RES/drawable/ic_launcher_background.xml" <<'EOF'
-          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-              <solid android:color="#0A0A0D" />
-          </shape>
-          EOF
-
-          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" <<'EOF'
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@drawable/ic_launcher_background" />
-              <foreground android:drawable="@drawable/ic_launcher_foreground" />
-          </adaptive-icon>
-          EOF
-          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
-
-          cat > "$RES/mipmap-anydpi/ic_launcher.xml" <<'EOF'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="48dp" android:height="48dp"
-              android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#0A0A0D" android:pathData="M0,0 H108 V108 H0 Z" />
-              <path android:fillColor="#A855F7" android:pathData="M19,31 L43,31 L51,39 L89,39 L89,78 Q89,84 83,84 L25,84 Q19,84 19,78 Z" />
-              <path android:fillColor="#F43F5E" android:pathData="M57,47 L73,61 L57,75 L57,66 L39,66 L39,56 L57,56 Z" />
-          </vector>
-          EOF
-          cp "$RES/mipmap-anydpi/ic_launcher.xml" "$RES/mipmap-anydpi/ic_launcher_round.xml"
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          manifest = Path('MCPE_Addon_Relay/app/src/main/AndroidManifest.xml')
-          s = manifest.read_text()
-          s = s.replace(
-              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
-              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />'
-          )
-          s = s.replace(
-              '<application\n        android:allowBackup="true"',
-              '<application\n        android:allowBackup="true"\n        android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher_round"'
-          )
-          s = s.replace(
-              'android:theme="@style/AppTheme">',
-              'android:theme="@style/AppTheme">\n\n        <provider\n            android:name="rikka.shizuku.ShizukuProvider"\n            android:authorities="${applicationId}.shizuku"\n            android:enabled="true"\n            android:exported="true"\n            android:multiprocess="false"\n            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />'
-          )
-          manifest.write_text(s)
-
-          main = Path('MCPE_Addon_Relay/app/src/main/java/dev/alastorkaneki/mcpeaddonrelay/MainActivity.java')
-          s = main.read_text()
-          s = s.replace(
-              'import android.view.View;\n',
-              'import android.view.View;\nimport android.view.WindowInsets;\nimport android.view.WindowInsetsController;\nimport android.view.WindowManager;\n'
-          )
-
-          permission_listener = '''    private final Shizuku.OnRequestPermissionResultListener shizukuPermissionListener =\n            (requestCode, grantResult) -> {\n                if (requestCode == SHIZUKU_REQUEST) refreshStatus();\n            };\n'''
-          binder_listeners = permission_listener + '''\n    private final Shizuku.OnBinderReceivedListener shizukuBinderReceivedListener =\n            this::refreshStatus;\n\n    private final Shizuku.OnBinderDeadListener shizukuBinderDeadListener =\n            this::refreshStatus;\n'''
-          if permission_listener not in s:
-              raise SystemExit('permission listener block not found')
-          s = s.replace(permission_listener, binder_listeners, 1)
-
-          old_oncreate = '''    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)\n                != PackageManager.PERMISSION_GRANTED) {\n            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 43);\n        }\n        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        setContentView(buildUi());\n        refreshStatus();\n    }\n'''
-          new_oncreate = '''    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        applyImmersiveMode();\n        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)\n                != PackageManager.PERMISSION_GRANTED) {\n            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 43);\n        }\n        setContentView(buildUi());\n        applyImmersiveMode();\n        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener);\n        Shizuku.addBinderDeadListener(shizukuBinderDeadListener);\n        refreshStatus();\n    }\n\n    @Override\n    protected void onResume() {\n        super.onResume();\n        applyImmersiveMode();\n        refreshStatus();\n    }\n\n    @Override\n    public void onWindowFocusChanged(boolean hasFocus) {\n        super.onWindowFocusChanged(hasFocus);\n        if (hasFocus) applyImmersiveMode();\n    }\n\n    private void applyImmersiveMode() {\n        getWindow().setStatusBarColor(Color.TRANSPARENT);\n        getWindow().setNavigationBarColor(Color.TRANSPARENT);\n\n        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {\n            WindowManager.LayoutParams params = getWindow().getAttributes();\n            params.layoutInDisplayCutoutMode =\n                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;\n            getWindow().setAttributes(params);\n        }\n\n        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {\n            getWindow().setDecorFitsSystemWindows(false);\n            WindowInsetsController controller = getWindow().getInsetsController();\n            if (controller != null) {\n                controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());\n                controller.setSystemBarsBehavior(\n                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);\n            }\n        } else {\n            getWindow().getDecorView().setSystemUiVisibility(\n                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY\n                            | View.SYSTEM_UI_FLAG_FULLSCREEN\n                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION\n                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN\n                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION\n                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);\n        }\n    }\n'''
-          if old_oncreate not in s:
-              raise SystemExit('onCreate block not found')
-          s = s.replace(old_oncreate, new_oncreate, 1)
-
-          old_destroy = '''    @Override\n    protected void onDestroy() {\n        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);\n        worker.shutdownNow();\n        super.onDestroy();\n    }\n'''
-          new_destroy = '''    @Override\n    protected void onDestroy() {\n        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);\n        Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener);\n        Shizuku.removeBinderDeadListener(shizukuBinderDeadListener);\n        worker.shutdownNow();\n        super.onDestroy();\n    }\n'''
-          if old_destroy not in s:
-              raise SystemExit('onDestroy block not found')
-          s = s.replace(old_destroy, new_destroy, 1)
-
-          old_refresh = '''        runOnUiThread(() -> {\n            if (!ShizukuShell.binderAlive()) {'''
-          new_refresh = '''        runOnUiThread(() -> {\n            if (shizukuStatus == null || destinationStatus == null) return;\n            if (!ShizukuShell.binderAlive()) {'''
-          if old_refresh not in s:
-              raise SystemExit('refreshStatus block not found')
-          s = s.replace(old_refresh, new_refresh, 1)
-          main.write_text(s)
-
-          check = main.read_text()
-          assert check.index('setContentView(buildUi());') < check.index('Shizuku.addBinderReceivedListenerSticky')
-          assert 'BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE' in check
-          assert 'SYSTEM_UI_FLAG_IMMERSIVE_STICKY' in check
-          assert 'onWindowFocusChanged' in check
-          assert 'shizukuStatus == null || destinationStatus == null' in check
-          PY
-
-      - name: Build relay APK
-        working-directory: MCPE_Addon_Relay
-        run: gradle :app:assembleDebug --stacktrace
-
-      - name: Upload relay APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: MCPE-Addon-Relay-immersive-debug
-          path: MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 1
+      - name: Delete immersive APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/9523651955"
