@@ -37,7 +37,7 @@ val removeAdsPatch = bytecodePatch(
                 0,
                 """
                     const/4 p2, 0x0
-                    invoke-interface { p3, p2 }, Lio/flutter/plugin/common/MethodChannel\$Result;->success(Ljava/lang/Object;)V
+                    invoke-interface { p3, p2 }, Lio/flutter/plugin/common/MethodChannel${'$'}Result;->success(Ljava/lang/Object;)V
                     return-void
                 """
             )
