@@ -1,8 +1,8 @@
 package dev.alastorkaneki.morphe.patches.mcpecenter
 
+import app.morphe.patcher.extensions.InstructionExtensions.addInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.bytecodePatch
-import app.morphe.util.returnEarly
 import dev.alastorkaneki.morphe.patches.mcpecenter.Constants.MCPE_CENTER
 
 /**
@@ -20,14 +20,14 @@ val removeAdsPatch = bytecodePatch(
     compatibleWith(MCPE_CENTER)
 
     execute {
-        // The app's own AppOpenManager is separate from the Flutter ad plugins.
-        AppOpenFetchAdFingerprint.method.returnEarly()
-        AppOpenShowAdFingerprint.method.returnEarly()
+        // Every targeted method returns void, so an immediate return is the least invasive hook.
+        AppOpenFetchAdFingerprint.method.addInstruction(0, "return-void")
+        AppOpenShowAdFingerprint.method.addInstruction(0, "return-void")
 
         // google_mobile_ads returns MethodChannel success from the plugin after load() is called,
         // so returning from the individual load methods cleanly prevents network ad requests.
         googleAdLoadFingerprints.forEach { fingerprint ->
-            fingerprint.method.returnEarly()
+            fingerprint.method.addInstruction(0, "return-void")
         }
 
         // yandex_mobileads routes each load through a command handler. Complete the command with
