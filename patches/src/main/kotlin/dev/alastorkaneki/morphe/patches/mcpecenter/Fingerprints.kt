@@ -25,16 +25,16 @@ internal object AddonMethodChannelFingerprint : Fingerprint(
     strings = listOf("install", "open_with", "isAmazon")
 )
 
+// The class + method name + descriptor uniquely identify the Android 13+ import helper.
+// Do not constrain this fingerprint by string order: the v2.5.0 bytecode loads the
+// FileProvider authority before the package name, and Morphe's string matcher is ordered.
+// RenamePackagePatch still rewrites only the exact ORIGINAL_PACKAGE and
+// ORIGINAL_FILE_PROVIDER literals inside this one method.
 internal object SendToMinecraft33Fingerprint : Fingerprint(
     definingClass = MAIN_ACTIVITY,
     name = "sendToMC33",
     returnType = "V",
-    parameters = listOf("Ljava/lang/String;"),
-    strings = listOf(
-        Constants.ORIGINAL_PACKAGE,
-        Constants.ORIGINAL_FILE_PROVIDER,
-        "com.mojang.minecraftpe"
-    )
+    parameters = listOf("Ljava/lang/String;")
 )
 
 internal object AppOpenFetchAdFingerprint : Fingerprint(
