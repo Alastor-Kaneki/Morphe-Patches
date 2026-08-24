@@ -25,8 +25,11 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Extract relay source
-        run: unzip -q .tmp-relay/relay-source.zip
+      - name: Reconstruct relay source
+        run: |
+          cat .tmp-relay/source.part* | base64 -d > relay-source.zip
+          unzip -t relay-source.zip
+          unzip -q relay-source.zip
 
       - name: Build relay APK
         working-directory: MCPE_Addon_Relay
