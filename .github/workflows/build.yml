@@ -95,3 +95,5 @@ jobs:
           path: MCPE_Addon_Relay/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 1
+
+# trigger
