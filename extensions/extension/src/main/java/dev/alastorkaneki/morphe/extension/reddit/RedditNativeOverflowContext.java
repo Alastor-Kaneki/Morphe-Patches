@@ -4,9 +4,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+ 
 
 /**
  * Exact Reddit 2026.41.0 hook target:
@@ -17,9 +15,7 @@ import java.util.regex.Pattern;
  * the exact post whose overflow menu the user just opened.
  */
 public final class RedditNativeOverflowContext {
-    private static final Pattern POST_FULLNAME =
-        Pattern.compile("(?i)^t3_([a-z0-9]{5,12})$");
-    private static final long LIFETIME_MS = 45_000L;
+     private static final long LIFETIME_MS = 45_000L;
     private static volatile String lastPostId;
     private static volatile long lastCapturedAt;
 
@@ -28,9 +24,8 @@ public final class RedditNativeOverflowContext {
     /** Safe to invoke from an injected constructor. No activity/UI work inline. */
     public static void onMenuOpened(String linkKindWithId) {
         if (linkKindWithId == null) return;
-        Matcher match = POST_FULLNAME.matcher(linkKindWithId.trim());
-        if (!match.matches()) return; // Ignore comments, subreddits and unknown event kinds.
-        String id = match.group(1).toLowerCase(Locale.US);
+        String id = RedditNativePostId.fromMenuLinkKindWithId(linkKindWithId);
+        if (id == null) return; // Ignore comments, subreddits and unknown event kinds.
         lastPostId = id;
         lastCapturedAt = SystemClock.elapsedRealtime();
         new Handler(Looper.getMainLooper()).post(() ->
