@@ -77,3 +77,10 @@ jobs:
         with:
           subject-name: 'Morphe Patches ${{ steps.semantic.outputs.new_release_git_tag }}'
           subject-path: patches/build/libs/patches-*.mpp
+
+      - name: Match source metadata digest to uploaded GitHub Release
+        if: steps.semantic.outputs.new_release_published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISHED_TAG: ${{ steps.semantic.outputs.new_release_git_tag }}
+        run: python3 tools/reconcile-published-release.py
