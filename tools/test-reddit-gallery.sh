@@ -9,7 +9,10 @@ javac -d "$OUTPUT" \
   "$ROOT/tools/RedditGalleryLinkSelfTest.java" \
   "$ROOT/tools/RedditNativePostSelfTest.java" \
   "$ROOT/extensions/extension/src/main/java/dev/alastorkaneki/morphe/extension/reddit/RedditShareLink.java" \
-  "$ROOT/tools/RedditShareLinkSelfTest.java"
+  "$ROOT/tools/RedditShareLinkSelfTest.java" \
+  "$ROOT/extensions/extension/src/main/java/dev/alastorkaneki/morphe/extension/reddit/RedditNativePostId.java" \
+  "$ROOT/tools/RedditNativeOverflow202641SelfTest.java"
 java -cp "$OUTPUT" RedditGalleryLinkSelfTest
 java -cp "$OUTPUT" RedditNativePostSelfTest
 java -cp "$OUTPUT" RedditShareLinkSelfTest
+java -cp "$OUTPUT" RedditNativeOverflow202641SelfTest
