@@ -326,6 +326,21 @@ The activity still needs to remain running for completion; background survival
 has not yet been tested. Private/deleted media might not be available in Arctic
 Shift or on Reddit's original CDN.
 
+**Reddit Share token compatibility:** Reddit's Android Share action can provide
+`reddit.com/r/<community>/s/<token>` instead of a conventional `/comments/`
+post URL. The patch now recognizes those shortlinks and safely follows only
+HTTPS redirects on Reddit-controlled hosts to obtain the canonical post ID
+before fetching Arctic Shift metadata. The native Share target opens an
+Images/ZIP chooser immediately and needs no link paste.
+
+**Native detection diagnostics:** If the floating ↓ Originals button cannot
+identify the active post, tap **Copy diagnostics** in its failure dialog.
+This copies the Android API, active Activity/Fragment class names,
+recognized post-related argument *keys* (not values), and whether the
+current screen exposes a post ID. It does not copy Reddit cookies, account
+details, private storage, or arbitrary app state. The report is meant to
+identify the relevant navigation shape in the installed Reddit APK.
+
 **Testing:** `bash tools/test-reddit-gallery.sh` and
 `gradle buildAndroid`. Validate on a patched Reddit APK before relying on it
 for large gallery downloads. Source remains modular under `patches/.../reddit/`

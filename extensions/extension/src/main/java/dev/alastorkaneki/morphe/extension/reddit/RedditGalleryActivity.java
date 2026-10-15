@@ -83,8 +83,8 @@ public final class RedditGalleryActivity extends Activity {
         root.addView(title);
 
         TextView hint = label(
-                "When opened from a Reddit post, the Originals button detects its post ID and " +
-                "offers direct Images / ZIP actions. Shared links also load automatically. " +
+                "Use Reddit's native Share → Reddit Gallery Originals for one-tap post selection. " +
+                "The ↓ Originals button also attempts to detect the active post. " +
                 "Original CDN files only; no previews, sign-in, or cookies.",
                 14, MUTED);
         hint.setPadding(0, dp(12), 0, dp(15));
@@ -134,7 +134,7 @@ public final class RedditGalleryActivity extends Activity {
         progressParams.topMargin = dp(12);
         root.addView(progress, progressParams);
 
-        status = label("Open ↓ Originals from a Reddit post, or use Reddit's Share menu.", 13, MUTED);
+        status = label("Open ↓ Originals from a Reddit post or use Reddit's Share menu — no paste needed.", 13, MUTED);
         status.setPadding(0, dp(8), 0, dp(12));
         root.addView(status);
         root.addView(label(
@@ -146,27 +146,48 @@ public final class RedditGalleryActivity extends Activity {
     private void handleIntent(Intent intent, boolean allowAutoDownload) {
         if (intent == null || input == null) return;
         String text = intent.getDataString();
-        if (RedditGalleryLink.postId(text) == null) {
+        if (!isSupportedPostReference(text)) {
             CharSequence shared = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
             if (shared != null) text = shared.toString();
         }
-        boolean suppliedByReddit = RedditGalleryLink.postId(text) != null;
+        boolean suppliedByReddit = isSupportedPostReference(text);
         if (!suppliedByReddit) text = readClipboard();
-        if (RedditGalleryLink.postId(text) != null) {
+        if (isSupportedPostReference(text)) {
             input.setText(text);
             input.setSelection(input.length());
+            String id = RedditGalleryLink.postId(text);
             status.setText(suppliedByReddit ?
-                    "Current Reddit post detected: " + RedditGalleryLink.postId(text) :
+                    (id == null ? "Reddit share token detected — ready to resolve automatically." :
+                        "Current post detected: " + id) :
                     "Post link from clipboard — choose Images or ZIP.");
         }
 
-        // The built-in Originals button passes this flag only when the user
-        // explicitly chose a save mode. Never auto-download from clipboard.
+        // The floating button only supplies this flag after the user explicitly
+        // selected a download type. A clipboard candidate never auto-starts.
         String mode = intent.getStringExtra(EXTRA_AUTOSTART_MODE);
         if (allowAutoDownload && suppliedByReddit && ("images".equals(mode) || "zip".equals(mode))) {
-            intent.removeExtra(EXTRA_AUTOSTART_MODE); // prevent duplicate after rotation
+            intent.removeExtra(EXTRA_AUTOSTART_MODE);
             startDownload("zip".equals(mode));
+            return;
         }
+
+        // Reddit's own Share -> Reddit Gallery Originals is already a native
+        // context action. Offer a save-mode chooser immediately, no paste.
+        if (allowAutoDownload && suppliedByReddit &&
+                Intent.ACTION_SEND.equals(intent.getAction())) {
+            intent.setAction("morphe.reddit.gallery.share.handled");
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Save this Reddit post's originals")
+                    .setMessage("Reddit shared the current post. Choose the original download format.")
+                    .setItems(new String[]{"Images · Pictures", "ZIP · Downloads"},
+                            (dialog, selected) -> startDownload(selected == 1))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        }
+    }
+
+    private static boolean isSupportedPostReference(String text) {
+        return RedditGalleryLink.postId(text) != null || RedditShareLink.find(text) != null;
     }
 
     private String readClipboard() {
@@ -177,14 +198,15 @@ public final class RedditGalleryActivity extends Activity {
             if (data == null || data.getItemCount() == 0) return null;
             CharSequence text = data.getItemAt(0).coerceToText(this);
             String candidate = text == null ? null : text.toString();
-            return RedditGalleryLink.postId(candidate) == null ? null : candidate;
+            return !isSupportedPostReference(candidate) ? null : candidate;
         } catch (RuntimeException ignored) { return null; }
     }
 
     private void startDownload(boolean zip) {
         if (busy) return;
-        String id = RedditGalleryLink.postId(input.getText().toString());
-        if (id == null) {
+        String submitted = input.getText().toString();
+        String directId = RedditGalleryLink.postId(submitted);
+        if (directId == null && RedditShareLink.find(submitted) == null) {
             status.setText("Open a Reddit post and tap ↓ Originals, or Share → Reddit Gallery Originals.");
             return;
         }
@@ -192,10 +214,14 @@ public final class RedditGalleryActivity extends Activity {
         saveImages.setEnabled(false);
         saveZip.setEnabled(false);
         progress.setVisibility(android.view.View.VISIBLE);
-        status.setText("Resolving gallery " + id + "…");
+        status.setText(directId == null ?
+                "Resolving Reddit's /s/ share link (no paste required)…" :
+                "Resolving gallery " + directId + "…");
         DOWNLOADS.execute(() -> {
             String result;
             try {
+                String id = directId == null ? RedditShareLink.resolve(submitted) : directId;
+                showStatus("Resolved post " + id + "; fetching original gallery metadata…");
                 RedditGalleryResolver.Gallery gallery = RedditGalleryResolver.resolve(id);
                 showStatus("Found " + gallery.photos.size() + " originals via " + gallery.source);
                 result = zip ? downloadZip(gallery) : downloadPhotos(gallery);
