@@ -43,6 +43,9 @@ public final class RedditCurrentPost {
         Match fragment = findActiveFragment(activity);
         if (fragment != null) return fragment;
 
+        Match navigation = findNavigationController(activity);
+        if (navigation != null) return navigation;
+
         Match screen = findOnScreen(activity);
         if (screen != null) return screen;
 
@@ -102,6 +105,9 @@ public final class RedditCurrentPost {
         Match child = fromFragmentManager(invoke(fragment, "getChildFragmentManager"), depth);
         if (child != null) return child;
 
+        Match nav = fromNavController(invoke(fragment, "getNavController"));
+        if (nav != null) return nav;
+
         Object args = invoke(fragment, "getArguments");
         if (args instanceof Bundle) {
             String id = fromBundle((Bundle) args, 0);
@@ -112,6 +118,96 @@ public final class RedditCurrentPost {
         // object graph, no access to credentials or cookies).
         String id = fromNamedFields(fragment);
         return id == null ? null : new Match(id, "active Reddit post model");
+    }
+
+    /** Support AndroidX Navigation/Compose host wrappers where fragments do not expose a post ID. */
+    private static Match findNavigationController(Activity activity) {
+        Match direct = fromNavController(invoke(activity, "getNavController"));
+        if (direct != null) return direct;
+        try {
+            Class<?> navigation = Class.forName("androidx.navigation.Navigation");
+            Method finder = navigation.getMethod("findNavController", View.class);
+            Object controller = finder.invoke(null, activity.getWindow().getDecorView());
+            return fromNavController(controller);
+        } catch (ReflectiveOperationException | RuntimeException ignored) { return null; }
+    }
+
+    private static Match fromNavController(Object controller) {
+        if (controller == null) return null;
+        try {
+            Object entry = invoke(controller, "getCurrentBackStackEntry");
+            if (entry != null) {
+                Object args = invoke(entry, "getArguments");
+                if (args instanceof Bundle) {
+                    String id = fromBundle((Bundle) args, 0);
+                    if (id != null) return new Match(id, "current AndroidX navigation entry");
+                }
+            }
+            Object destination = invoke(controller, "getCurrentDestination");
+            if (destination != null) {
+                Object route = invoke(destination, "getRoute");
+                if (route instanceof String) {
+                    String id = RedditPostToken.fromUntrustedText((String) route);
+                    if (id != null) return new Match(id, "current navigation route");
+                }
+            }
+        } catch (RuntimeException ignored) { }
+        return null;
+    }
+
+    /** Minimal, value-free diagnostic report. No cookies, texts, account info or hidden objects. */
+    public static String diagnosticReport(Activity activity) {
+        StringBuilder b = new StringBuilder("Reddit Morphe native-post diagnostics\n");
+        b.append("Android API ").append(android.os.Build.VERSION.SDK_INT).append('\n');
+        if (activity == null) return b.append("No foreground activity\n").toString();
+        b.append("Activity: ").append(activity.getClass().getName()).append('\n');
+        Match current = detect(activity);
+        b.append("Detected: ").append(current == null ? "NONE" : current.postId + " (" + current.source + ")").append('\n');
+        try {
+            Intent intent = activity.getIntent();
+            b.append("Intent post URL: ")
+                    .append(intent != null && RedditGalleryLink.postId(intent.getDataString()) != null)
+                    .append('\n');
+            b.append("Intent /s/ share token: ")
+                    .append(intent != null && RedditShareLink.find(intent.getDataString()) != null)
+                    .append('\n');
+            if (intent != null && intent.getExtras() != null) {
+                b.append("Recognized extras: ");
+                for (String key : intent.getExtras().keySet())
+                    if (RedditPostToken.isPostKey(key) || RedditPostToken.isUrlKey(key))
+                        b.append(key).append(' ');
+                b.append('\n');
+            }
+        } catch (RuntimeException e) { b.append("Intent metadata unavailable\n"); }
+        snapshotFragments(b, invoke(activity, "getSupportFragmentManager"), "AndroidX");
+        snapshotFragments(b, activity.getFragmentManager(), "Framework");
+        Match screen = findOnScreen(activity);
+        b.append("Visible UI candidate: ").append(screen == null ? "NONE" : screen.postId).append('\n');
+        return b.toString();
+    }
+
+    private static void snapshotFragments(StringBuilder b, Object manager, String title) {
+        if (manager == null) return;
+        Object fragments = invoke(manager, "getFragments");
+        if (!(fragments instanceof List)) return;
+        List<?> list = (List<?>) fragments;
+        b.append(title).append(" fragments: ").append(list.size()).append('\n');
+        for (int i = list.size() - 1, seen = 0; i >= 0 && seen < 10; i--) {
+            Object f = list.get(i);
+            if (f == null) continue;
+            seen++;
+            b.append(" - ").append(f.getClass().getName())
+                .append(" active=").append(isActive(f)).append('\n');
+            Object args = invoke(f, "getArguments");
+            if (args instanceof Bundle) {
+                b.append("   post-related argument keys: ");
+                for (String key : ((Bundle) args).keySet()) {
+                    if (RedditPostToken.isPostKey(key) || RedditPostToken.isUrlKey(key))
+                        b.append(key).append(' ');
+                }
+                b.append('\n');
+            }
+        }
     }
 
     private static boolean isActive(Object fragment) {
