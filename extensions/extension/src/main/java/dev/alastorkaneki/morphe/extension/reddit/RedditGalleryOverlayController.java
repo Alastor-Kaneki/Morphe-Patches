@@ -70,14 +70,37 @@ public final class RedditGalleryOverlayController implements Application.Activit
                 ColorStateList.valueOf(Color.argb(65, 255, 255, 255)), background, null));
 
         button.setOnClickListener(v -> {
-            Intent intent = new Intent(activity, RedditGalleryActivity.class);
-            // This only autofills a legitimate Reddit post URL; otherwise
-            // the downloader lets the user paste a link.
-            String current = activity.getIntent() == null
-                    ? null : activity.getIntent().getDataString();
-            if (RedditGalleryLink.postId(current) != null)
-                intent.setData(android.net.Uri.parse(current));
-            activity.startActivity(intent);
+            // Capture the active Reddit post before starting our Activity.
+            // Activity launch can destroy the previous view/navigation state.
+            RedditCurrentPost.Match current = RedditCurrentPost.detect(activity);
+            if (current != null) {
+                String link = "https://www.reddit.com/gallery/" + current.postId;
+                new android.app.AlertDialog.Builder(activity)
+                        .setTitle("Originals · " + current.postId)
+                        .setMessage("Detected from " + current.source + ". Save this post's original images:")
+                        .setItems(new String[]{"Images · Pictures", "ZIP · Downloads"}, (dialog, selected) -> {
+                            Intent intent = new Intent(activity, RedditGalleryActivity.class);
+                            intent.setData(android.net.Uri.parse(link));
+                            intent.putExtra(RedditGalleryActivity.EXTRA_AUTOSTART_MODE,
+                                    selected == 0 ? "images" : "zip");
+                            activity.startActivity(intent);
+                        })
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
+                return;
+            }
+
+            // Some Reddit versions never expose the current post ID through
+            // public Activity or fragment state. Don't silently download a
+            // stale/unrelated feed post: offer native Share as the fallback.
+            new android.app.AlertDialog.Builder(activity)
+                    .setTitle("Can't identify the current post")
+                    .setMessage("Open the post itself and tap ↓ Originals again. " +
+                            "Or use Reddit's Share → Reddit Gallery Originals to pass the link automatically, without pasting.")
+                    .setPositiveButton("Open downloader", (dialog, selected) ->
+                            activity.startActivity(new Intent(activity, RedditGalleryActivity.class)))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
         });
 
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(

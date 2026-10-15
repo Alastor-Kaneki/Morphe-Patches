@@ -308,13 +308,23 @@ Gallery Goblin v4, checks original image signatures before saving, and enforces
 per-image bounds. File writes use Android MediaStore, so **Android 10 or newer**
 is required for this initial implementation.
 
-The button launches a separate page: it does **not** hook Reddit's private
-download/viewer methods or silently capture cookies. The post URL may need
-pasting if Reddit does not expose its current navigation URL through the
-foreground Activity. Downloading is performed by the activity while the patched
-app remains running; background survival and compatibility with individual
-Reddit APK versions have not been tested. Private/deleted media might not be
-available in Arctic Shift or on the Reddit image CDN.
+**Native current-post detection:** Tap the in-app **↓ Originals** pill while
+viewing an individual post. The patch inspects active/resumed Reddit navigation
+fragments, the current visible post's UI metadata, and the Activity's deep-link
+intent (in that order). When it finds a unique post ID, a native Android
+dialog offers **Images · Pictures** or **ZIP · Downloads**; selecting a mode
+starts the download immediately, without pasting a link. It also accepts
+Reddit's native **Share → Reddit Gallery Originals** action, which carries the
+post URL directly. A clipboard/paste fallback remains optional.
+
+No background clipboard scraping, accessibility permissions, private account
+credentials, or broad arbitrary-object traversal are used. The detector
+deliberately refuses ambiguous feed screens rather than downloading the wrong
+post. Since Reddit's internal navigation models vary by APK version, post
+detection is best-effort until verified against the exact installed Reddit APK.
+The activity still needs to remain running for completion; background survival
+has not yet been tested. Private/deleted media might not be available in Arctic
+Shift or on Reddit's original CDN.
 
 **Testing:** `bash tools/test-reddit-gallery.sh` and
 `gradle buildAndroid`. Validate on a patched Reddit APK before relying on it
