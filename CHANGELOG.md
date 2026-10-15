@@ -1,3 +1,9 @@
+## [1.15.1](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.15.0...v1.15.1) (2026-10-15)
+
+### 🐛 Bug Fixes
+
+* **reddit:** detect current post natively for originals download ([#38](https://github.com/Alastor-Kaneki/Morphe-Patches/issues/38)) ([39f7e98](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/39f7e98aed1a6baac9de48026d28a4518199eb4b))
+
 ## [1.15.0](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.14.2...v1.15.0) (2026-10-15)
 
 ### ✨ New Features
