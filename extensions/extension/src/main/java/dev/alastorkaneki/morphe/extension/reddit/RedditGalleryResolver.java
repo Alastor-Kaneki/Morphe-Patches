@@ -66,8 +66,8 @@ public final class RedditGalleryResolver {
             if (post == null || !postId.equalsIgnoreCase(post.optString("id")))
                 throw new IOException("Arctic Shift returned an unexpected post");
             return parseGallery(post, postId, "Arctic Shift");
-        } catch (IOException | JSONException e) {
-            archiveFailure = new IOException(e.getMessage(), e);
+        } catch (IOException e) {
+            archiveFailure = e;
         }
 
         // Anonymous Reddit JSON is often HTTP 403, but remains a useful fallback
