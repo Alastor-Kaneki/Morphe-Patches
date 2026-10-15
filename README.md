@@ -6,7 +6,7 @@ patches are added to this project and built together into one `.mpp` bundle.
 ## Included patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.14.1](https://github.com/Alastor-Kaneki/Morphe-Patches/releases/tag/v1.14.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;10 patches total
+> **[v1.14.2](https://github.com/Alastor-Kaneki/Morphe-Patches/releases/tag/v1.14.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;10 patches total
 <details open>
 <summary>📦 Mods AddOns for Minecraft PE&nbsp;&nbsp;•&nbsp;&nbsp;4 patches</summary>
 <br>
@@ -53,7 +53,7 @@ patches are added to this project and built together into one `.mpp` bundle.
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
-| [MonkeyScript userscript manager](#monkeyscript-userscript-manager) | Adds a Chrome 150 Material You userscript manager using a Violentmonkey-derived parser, native app-menu integration, guaranteed Fork-page installation, Greasy Fork/Sleazy Fork support, publishing, and configurable app/package cloning. |  |
+| [MonkeyScript userscript manager](#monkeyscript-userscript-manager) | Adds the Chrome 150 Material You userscript manager and cloning. Trichrome builds need the matching original Trichrome Library APK installed before the patched Chrome APK. |  |
 
 </details>
 

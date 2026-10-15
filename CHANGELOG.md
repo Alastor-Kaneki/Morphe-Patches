@@ -1,3 +1,9 @@
+## [1.14.2](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.14.1...v1.14.2) (2026-10-15)
+
+### 🐛 Bug Fixes
+
+* **chrome:** verify and install matching Trichrome Library ([#36](https://github.com/Alastor-Kaneki/Morphe-Patches/issues/36)) ([def6f2d](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/def6f2d2f8cd92ba4a1332c16a7d102433296ff7))
+
 ## [1.14.1](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.14.0...v1.14.1) (2026-08-24)
 
 ### 🐛 Bug Fixes
