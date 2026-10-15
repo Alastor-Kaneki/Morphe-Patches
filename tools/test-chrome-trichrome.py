@@ -65,7 +65,17 @@ class ChromeTrichromeTest(unittest.TestCase):
 
     def test_colon_delimited_digest(self):
         entry = MOD.trichrome_requirement(CHROME)
-        entry["certDigest"] = ":".join(DIGEST[i:i + 2] for i in range(0, 64, 2))
+        entry["certDigests"] = [
+            ":".join(DIGEST[i:i + 2] for i in range(0, 64, 2))
+        ]
+        MOD.validate_library(entry, LIBRARY, SIGNED)
+
+    def test_multiple_pinned_certificates(self):
+        chrome = CHROME.replace(
+            "certDigest='", f"certDigest='{WRONG_DIGEST}' certDigest='"
+        )
+        entry = MOD.trichrome_requirement(chrome)
+        self.assertEqual(len(entry["certDigests"]), 2)
         MOD.validate_library(entry, LIBRARY, SIGNED)
 
     def test_no_missing_requirement_bypass(self):
