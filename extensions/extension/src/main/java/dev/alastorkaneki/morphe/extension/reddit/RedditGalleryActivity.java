@@ -178,7 +178,7 @@ public final class RedditGalleryActivity extends Activity {
             intent.setAction("morphe.reddit.gallery.share.handled");
             new android.app.AlertDialog.Builder(this)
                     .setTitle("Save this Reddit post's originals")
-                    .setMessage("Reddit shared the current post. Choose the original download format.")
+                    .setMessage("Reddit shared the current post. ZIP or image download will resolve its post ID automatically.")
                     .setItems(new String[]{"Images · Pictures", "ZIP · Downloads"},
                             (dialog, selected) -> startDownload(selected == 1))
                     .setNegativeButton(android.R.string.cancel, null)
@@ -207,37 +207,80 @@ public final class RedditGalleryActivity extends Activity {
         String submitted = input.getText().toString();
         String directId = RedditGalleryLink.postId(submitted);
         if (directId == null && RedditShareLink.find(submitted) == null) {
-            status.setText("Open a Reddit post and tap ↓ Originals, or Share → Reddit Gallery Originals.");
+            status.setText("No post detected. Use Reddit's Share menu to send the current gallery.");
             return;
         }
+
         busy = true;
         saveImages.setEnabled(false);
         saveZip.setEnabled(false);
         progress.setVisibility(android.view.View.VISIBLE);
-        status.setText(directId == null ?
-                "Resolving Reddit's /s/ share link (no paste required)…" :
-                "Resolving gallery " + directId + "…");
+        if (directId != null) {
+            startResolvedDownload(directId, zip);
+            return;
+        }
+
+        // A short /s/ URL contains a random opaque token, not a post ID.
+        // Resolving it is separate from Arctic Shift metadata and CDN access.
+        status.setText("Share link: expanding Reddit's /s/ token…");
+        DOWNLOADS.execute(() -> {
+            try {
+                String id = RedditShareLink.resolve(submitted);
+                runOnUiThread(() -> startResolvedDownload(id, zip));
+            } catch (Exception first) {
+                String http = first.getClass().getSimpleName() + ": " + first.getMessage();
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    status.setText("Share redirect failed (" + http +
+                            "). Trying the Android browser network stack…");
+                    RedditBrowserShareResolver.resolve(this, submitted, (postId, webError) -> {
+                        if (postId != null) {
+                            startResolvedDownload(postId, zip);
+                        } else {
+                            finishDownload("SHARE LINK 403/REDIRECT failure: HTTP client: " +
+                                    http + "; Android browser: " + webError +
+                                    ". The short /s/ token could not be expanded into a post ID.");
+                        }
+                    });
+                });
+            }
+        });
+    }
+
+    private void startResolvedDownload(String id, boolean zip) {
+        showStatus("POST ID " + id + " resolved. Loading Arctic Shift gallery metadata…");
         DOWNLOADS.execute(() -> {
             String result;
             try {
-                String id = directId == null ? RedditShareLink.resolve(submitted) : directId;
-                showStatus("Resolved post " + id + "; fetching original gallery metadata…");
-                RedditGalleryResolver.Gallery gallery = RedditGalleryResolver.resolve(id);
-                showStatus("Found " + gallery.photos.size() + " originals via " + gallery.source);
-                result = zip ? downloadZip(gallery) : downloadPhotos(gallery);
+                RedditGalleryResolver.Gallery gallery;
+                try {
+                    gallery = RedditGalleryResolver.resolve(id);
+                } catch (Exception e) {
+                    throw new IOException("METADATA stage failed: " + e.getMessage(), e);
+                }
+                showStatus("METADATA OK: " + gallery.photos.size() + " originals from " +
+                        gallery.source + ". Starting image transfer…");
+                try {
+                    result = zip ? downloadZip(gallery) : downloadPhotos(gallery);
+                } catch (Exception e) {
+                    throw new IOException("IMAGE DOWNLOAD or STORAGE stage failed: " +
+                            e.getMessage(), e);
+                }
             } catch (Exception error) {
-                result = "Failed: " + error.getClass().getSimpleName() + ": " + error.getMessage();
+                result = error.getClass().getSimpleName() + ": " + error.getMessage();
             }
             final String finalResult = result;
-            runOnUiThread(() -> {
-                busy = false;
-                saveImages.setEnabled(true);
-                saveZip.setEnabled(true);
-                progress.setVisibility(android.view.View.GONE);
-                status.setText(finalResult);
-                toast(finalResult.length() > 90 ? finalResult.substring(0, 90) : finalResult);
-            });
+            runOnUiThread(() -> finishDownload(finalResult));
         });
+    }
+
+    private void finishDownload(String result) {
+        busy = false;
+        saveImages.setEnabled(true);
+        saveZip.setEnabled(true);
+        progress.setVisibility(android.view.View.GONE);
+        status.setText(result);
+        toast(result.length() > 100 ? result.substring(0, 100) : result);
     }
 
     private String downloadZip(RedditGalleryResolver.Gallery gallery) throws IOException {
@@ -249,8 +292,14 @@ public final class RedditGalleryActivity extends Activity {
                     showStatus("Downloading original " + (index + 1) + "/" + gallery.photos.size() +
                             " to ZIP…");
                     zip.putNextEntry(new ZipEntry(photo.name));
-                    RedditGalleryResolver.streamOriginal(photo, (source, maxBytes) ->
-                            copyBounded(source, zip, maxBytes));
+                    try {
+                        RedditGalleryResolver.streamOriginal(photo, (source, maxBytes) ->
+                                copyBounded(source, zip, maxBytes));
+                    } catch (IOException e) {
+                        throw new IOException("CDN original " + (index + 1) + "/" +
+                                gallery.photos.size() + " (" + photo.name + ") failed: " +
+                                e.getMessage(), e);
+                    }
                     zip.closeEntry();
                 }
                 zip.putNextEntry(new ZipEntry("manifest.txt"));
