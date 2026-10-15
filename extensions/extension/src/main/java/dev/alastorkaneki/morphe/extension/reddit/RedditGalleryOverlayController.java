@@ -17,6 +17,7 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.lang.ref.WeakReference;
 
 /**
  * Self-contained launcher button displayed over foreground Reddit activities.
@@ -24,6 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class RedditGalleryOverlayController implements Application.ActivityLifecycleCallbacks {
     private static final String TAG = "morphe.reddit.gallery.originals.button";
+    private static final String CONTEXT_TAG = "morphe.reddit.gallery.originals.nativecontext";
+    private static volatile WeakReference<Activity> foreground = new WeakReference<>(null);
     private static final AtomicBoolean INSTALLED = new AtomicBoolean(false);
 
     private RedditGalleryOverlayController() { }
@@ -35,6 +38,7 @@ public final class RedditGalleryOverlayController implements Application.Activit
 
     @Override public void onActivityResumed(Activity activity) {
         if (activity instanceof RedditGalleryActivity) return;
+        foreground = new WeakReference<>(activity);
         try { attach(activity); } catch (RuntimeException ignored) {
             // Never crash Reddit because its Activity hierarchy changed.
         }
@@ -72,7 +76,10 @@ public final class RedditGalleryOverlayController implements Application.Activit
         button.setOnClickListener(v -> {
             // Capture the active Reddit post before starting our Activity.
             // Activity launch can destroy the previous view/navigation state.
-            RedditCurrentPost.Match current = RedditCurrentPost.detect(activity);
+            String eventPost = RedditNativeOverflowContext.recentPostId();
+            RedditCurrentPost.Match current = eventPost != null ?
+                    new RedditCurrentPost.Match(eventPost, "Reddit's native overflow-menu event") :
+                    RedditCurrentPost.detect(activity);
             if (current != null) {
                 String link = "https://www.reddit.com/gallery/" + current.postId;
                 new android.app.AlertDialog.Builder(activity)
@@ -127,11 +134,81 @@ public final class RedditGalleryOverlayController implements Application.Activit
         button.bringToFront();
     }
 
+    /** Contextual native action shown only after Reddit opens a specific post's menu.
+     * It is a separate Android view, not a modification of the original
+     * proprietary action-sheet rows. It may be covered by modal menus.
+     */
+    static void showNativeContextAction(String postId) {
+        Activity activity = foreground.get();
+        if (activity == null || activity instanceof RedditGalleryActivity ||
+                activity.isFinishing() || activity.isDestroyed()) return;
+        try {
+            View root = activity.getWindow().getDecorView();
+            View existing = root.findViewWithTag(CONTEXT_TAG);
+            if (existing != null && existing.getParent() instanceof ViewGroup)
+                ((ViewGroup) existing.getParent()).removeView(existing);
+
+            TextView action = new TextView(activity);
+            action.setTag(CONTEXT_TAG);
+            action.setText("↓  Save originals");
+            action.setContentDescription("Save original images from post " + postId);
+            action.setTextColor(Color.WHITE);
+            action.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            action.setTypeface(Typeface.DEFAULT_BOLD);
+            action.setGravity(Gravity.CENTER);
+            action.setPadding(dp(activity, 15), dp(activity, 10),
+                    dp(activity, 15), dp(activity, 10));
+            action.setElevation(dp(activity, 14));
+            GradientDrawable background = new GradientDrawable();
+            background.setColor(Color.rgb(65, 14, 85));
+            background.setCornerRadius(dp(activity, 18));
+            background.setStroke(dp(activity, 1), Color.rgb(169, 0, 255));
+            action.setBackground(new RippleDrawable(
+                    ColorStateList.valueOf(Color.argb(65, 255, 255, 255)),
+                    background, null));
+            action.setOnClickListener(v -> {
+                if (action.getParent() instanceof ViewGroup)
+                    ((ViewGroup) action.getParent()).removeView(action);
+                showSaveChooser(activity, postId, "Reddit native overflow event");
+            });
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    dp(activity, 48), Gravity.END | Gravity.BOTTOM);
+            params.setMargins(dp(activity, 12), dp(activity, 12),
+                    dp(activity, 12), dp(activity, 177));
+            activity.addContentView(action, params);
+            action.bringToFront();
+            action.postDelayed(() -> {
+                if (action.getParent() instanceof ViewGroup)
+                    ((ViewGroup) action.getParent()).removeView(action);
+            }, 26000);
+        } catch (RuntimeException ignored) { /* Reddit UI must never crash. */ }
+    }
+
+    private static void showSaveChooser(Activity activity, String postId, String source) {
+        if (activity.isFinishing() || activity.isDestroyed()) return;
+        String link = "https://www.reddit.com/gallery/" + postId;
+        new android.app.AlertDialog.Builder(activity)
+                .setTitle("Save originals · " + postId)
+                .setMessage("Post recognized from " + source + ". Save the original gallery:")
+                .setItems(new String[]{"Images · Pictures", "ZIP · Downloads"}, (dialog, selected) -> {
+                    Intent intent = new Intent(activity, RedditGalleryActivity.class);
+                    intent.setData(android.net.Uri.parse(link));
+                    intent.putExtra(RedditGalleryActivity.EXTRA_AUTOSTART_MODE,
+                            selected == 0 ? "images" : "zip");
+                    activity.startActivity(intent);
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
     private static void detach(Activity activity) {
         try {
-            View view = activity.getWindow().getDecorView().findViewWithTag(TAG);
-            if (view != null && view.getParent() instanceof ViewGroup)
-                ((ViewGroup) view.getParent()).removeView(view);
+            for (String tag : new String[]{TAG, CONTEXT_TAG}) {
+                View view = activity.getWindow().getDecorView().findViewWithTag(tag);
+                if (view != null && view.getParent() instanceof ViewGroup)
+                    ((ViewGroup) view.getParent()).removeView(view);
+            }
         } catch (RuntimeException ignored) { }
     }
 
@@ -139,7 +216,10 @@ public final class RedditGalleryOverlayController implements Application.Activit
         return Math.round(value * activity.getResources().getDisplayMetrics().density);
     }
 
-    @Override public void onActivityPaused(Activity activity) { detach(activity); }
+    @Override public void onActivityPaused(Activity activity) {
+        detach(activity);
+        if (foreground.get() == activity) foreground = new WeakReference<>(null);
+    }
     @Override public void onActivityDestroyed(Activity activity) { detach(activity); }
     @Override public void onActivityCreated(Activity activity, Bundle state) { }
     @Override public void onActivityStarted(Activity activity) { }
