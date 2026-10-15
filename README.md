@@ -333,6 +333,23 @@ HTTPS redirects on Reddit-controlled hosts to obtain the canonical post ID
 before fetching Arctic Shift metadata. The native Share target opens an
 Images/ZIP chooser immediately and needs no link paste.
 
+**403 handling:** Reddit may return HTTP 403 while expanding opaque
+`/r/<community>/s/<token>` Share URLs, even though Arctic Shift can retrieve
+gallery metadata once a post ID is known. When the normal HTTP redirect
+resolver fails, the patch now tries the device's Android WebView browser
+stack (Reddit HTTPS hosts only). If both fail, the user sees an explicit
+**SHARE LINK / REDIRECT** error instead of a misleading gallery/CDN error.
+The metadata and image/storage stages also report their own failures.
+
+**Known limitation:** On some modern Reddit builds the visible post is hosted
+inside a single `com.reddit.launch.main.MainActivity` with no exposed
+post-bearing Fragment or deep-link Intent. The floating Originals button
+cannot reliably infer the current post from those Android APIs alone.
+A version-specific hook based on an actual Reddit APK will be needed for
+fully automatic in-feed detection. Until then, the native Reddit Share action
+is preferred and may still fail when Reddit blocks both redirect clients.
+No network method can guarantee expansion of an opaque `/s/` token.
+
 **Native detection diagnostics:** If the floating ↓ Originals button cannot
 identify the active post, tap **Copy diagnostics** in its failure dialog.
 This copies the Android API, active Activity/Fragment class names,
