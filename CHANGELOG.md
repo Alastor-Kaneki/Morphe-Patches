@@ -1,3 +1,9 @@
+## [1.15.2](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.15.1...v1.15.2) (2026-10-15)
+
+### 🐛 Bug Fixes
+
+* **reddit:** support native Share shortlinks and current-post diagnostics ([#39](https://github.com/Alastor-Kaneki/Morphe-Patches/issues/39)) ([35a3b31](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/35a3b31dec800400c4cfe614c24ac2509253655b))
+
 ## [1.15.1](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.15.0...v1.15.1) (2026-10-15)
 
 ### 🐛 Bug Fixes

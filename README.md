@@ -6,7 +6,7 @@ patches are added to this project and built together into one `.mpp` bundle.
 ## Included patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.15.1](https://github.com/Alastor-Kaneki/Morphe-Patches/releases/tag/v1.15.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;11 patches total
+> **[v1.15.2](https://github.com/Alastor-Kaneki/Morphe-Patches/releases/tag/v1.15.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;11 patches total
 <details open>
 <summary>📦 Mods AddOns for Minecraft PE&nbsp;&nbsp;•&nbsp;&nbsp;4 patches</summary>
 <br>
