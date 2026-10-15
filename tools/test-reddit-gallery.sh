@@ -5,5 +5,8 @@ OUTPUT="$ROOT/build/reddit-gallery-test"
 mkdir -p "$OUTPUT"
 javac -d "$OUTPUT" \
   "$ROOT/extensions/extension/src/main/java/dev/alastorkaneki/morphe/extension/reddit/RedditGalleryLink.java" \
-  "$ROOT/tools/RedditGalleryLinkSelfTest.java"
+  "$ROOT/extensions/extension/src/main/java/dev/alastorkaneki/morphe/extension/reddit/RedditPostToken.java" \
+  "$ROOT/tools/RedditGalleryLinkSelfTest.java" \
+  "$ROOT/tools/RedditNativePostSelfTest.java"
 java -cp "$OUTPUT" RedditGalleryLinkSelfTest
+java -cp "$OUTPUT" RedditNativePostSelfTest
