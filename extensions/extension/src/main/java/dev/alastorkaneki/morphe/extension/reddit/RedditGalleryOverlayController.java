@@ -94,11 +94,25 @@ public final class RedditGalleryOverlayController implements Application.Activit
             // public Activity or fragment state. Don't silently download a
             // stale/unrelated feed post: offer native Share as the fallback.
             new android.app.AlertDialog.Builder(activity)
-                    .setTitle("Can't identify the current post")
-                    .setMessage("Open the post itself and tap ↓ Originals again. " +
-                            "Or use Reddit's Share → Reddit Gallery Originals to pass the link automatically, without pasting.")
+                    .setTitle("Reddit didn't expose this post's ID")
+                    .setMessage("Native post detection varies across Reddit versions. " +
+                            "Use the current post's Share button → Reddit Gallery Originals " +
+                            "to save without copying or pasting. If that also fails, " +
+                            "tap Copy diagnostics to report the missing navigation data.")
                     .setPositiveButton("Open downloader", (dialog, selected) ->
                             activity.startActivity(new Intent(activity, RedditGalleryActivity.class)))
+                    .setNeutralButton("Copy diagnostics", (dialog, selected) -> {
+                        String report = RedditCurrentPost.diagnosticReport(activity);
+                        android.content.ClipboardManager clipboard =
+                                (android.content.ClipboardManager)
+                                activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                        if (clipboard != null) {
+                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
+                                    "Reddit Morphe diagnostic", report));
+                            android.widget.Toast.makeText(activity, "Safe diagnostics copied",
+                                    android.widget.Toast.LENGTH_LONG).show();
+                        }
+                    })
                     .setNegativeButton(android.R.string.cancel, null)
                     .show();
         });
