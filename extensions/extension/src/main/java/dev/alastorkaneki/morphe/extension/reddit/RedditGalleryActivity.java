@@ -39,6 +39,7 @@ import java.util.zip.ZipOutputStream;
 
 /** Self-contained Reddit patch UI; needs no access to Reddit's internal classes. */
 public final class RedditGalleryActivity extends Activity {
+    public static final String EXTRA_AUTOSTART_MODE = "morphe.reddit.gallery.autostart_mode";
     private static final int DARK = Color.rgb(14, 13, 19);
     private static final int SURFACE = Color.rgb(29, 25, 38);
     private static final int ACCENT = Color.rgb(169, 0, 255);
@@ -57,13 +58,13 @@ public final class RedditGalleryActivity extends Activity {
         getWindow().setStatusBarColor(DARK);
         getWindow().setNavigationBarColor(DARK);
         buildUi();
-        handleIntent(getIntent());
+        handleIntent(getIntent(), state == null);
     }
 
     @Override protected void onNewIntent(Intent next) {
         super.onNewIntent(next);
         setIntent(next);
-        handleIntent(next);
+        handleIntent(next, true);
     }
 
     private void buildUi() {
@@ -82,8 +83,9 @@ public final class RedditGalleryActivity extends Activity {
         root.addView(title);
 
         TextView hint = label(
-                "Save gallery images from i.redd.it at their original available quality. " +
-                "Uses Arctic Shift metadata first, then Reddit. No previews, sign-in, or cookies.",
+                "When opened from a Reddit post, the Originals button detects its post ID and " +
+                "offers direct Images / ZIP actions. Shared links also load automatically. " +
+                "Original CDN files only; no previews, sign-in, or cookies.",
                 14, MUTED);
         hint.setPadding(0, dp(12), 0, dp(15));
         root.addView(hint);
@@ -93,13 +95,13 @@ public final class RedditGalleryActivity extends Activity {
         input.setTextColor(Color.WHITE);
         input.setHintTextColor(MUTED);
         input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        input.setHint("https://reddit.com/gallery/…");
+        input.setHint("Detected post URL (or paste manually)");
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         input.setPadding(dp(12), dp(12), dp(12), dp(12));
         input.setBackground(roundRect(SURFACE, dp(12)));
         root.addView(input, new LinearLayout.LayoutParams(-1, -2));
 
-        Button paste = button("Paste Reddit link", SURFACE);
+        Button paste = button("Paste link manually (optional)", SURFACE);
         LinearLayout.LayoutParams pasteParams = new LinearLayout.LayoutParams(-1, dp(49));
         pasteParams.topMargin = dp(10);
         root.addView(paste, pasteParams);
@@ -132,7 +134,7 @@ public final class RedditGalleryActivity extends Activity {
         progressParams.topMargin = dp(12);
         root.addView(progress, progressParams);
 
-        status = label("Ready. Share a Reddit link or paste one above.", 13, MUTED);
+        status = label("Open ↓ Originals from a Reddit post, or use Reddit's Share menu.", 13, MUTED);
         status.setPadding(0, dp(8), 0, dp(12));
         root.addView(status);
         root.addView(label(
@@ -141,17 +143,29 @@ public final class RedditGalleryActivity extends Activity {
                 12, MUTED));
     }
 
-    private void handleIntent(Intent intent) {
+    private void handleIntent(Intent intent, boolean allowAutoDownload) {
         if (intent == null || input == null) return;
         String text = intent.getDataString();
-        if (text == null) {
+        if (RedditGalleryLink.postId(text) == null) {
             CharSequence shared = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
             if (shared != null) text = shared.toString();
         }
-        if (RedditGalleryLink.postId(text) == null) text = readClipboard();
+        boolean suppliedByReddit = RedditGalleryLink.postId(text) != null;
+        if (!suppliedByReddit) text = readClipboard();
         if (RedditGalleryLink.postId(text) != null) {
             input.setText(text);
             input.setSelection(input.length());
+            status.setText(suppliedByReddit ?
+                    "Current Reddit post detected: " + RedditGalleryLink.postId(text) :
+                    "Post link from clipboard — choose Images or ZIP.");
+        }
+
+        // The built-in Originals button passes this flag only when the user
+        // explicitly chose a save mode. Never auto-download from clipboard.
+        String mode = intent.getStringExtra(EXTRA_AUTOSTART_MODE);
+        if (allowAutoDownload && suppliedByReddit && ("images".equals(mode) || "zip".equals(mode))) {
+            intent.removeExtra(EXTRA_AUTOSTART_MODE); // prevent duplicate after rotation
+            startDownload("zip".equals(mode));
         }
     }
 
@@ -171,7 +185,7 @@ public final class RedditGalleryActivity extends Activity {
         if (busy) return;
         String id = RedditGalleryLink.postId(input.getText().toString());
         if (id == null) {
-            status.setText("Paste a Reddit post or gallery URL (not an image preview URL).");
+            status.setText("Open a Reddit post and tap ↓ Originals, or Share → Reddit Gallery Originals.");
             return;
         }
         busy = true;
