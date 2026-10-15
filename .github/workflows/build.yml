@@ -41,6 +41,9 @@ jobs:
       - name: Test Chrome page runtime and Material UI
         run: bash tools/test-chrome-runtime-bridge.sh
 
+      - name: Test Chrome Trichrome dependency installer
+        run: python3 tools/test-chrome-trichrome.py
+
       - name: Build Android Morphe bundle
         env:
           GITHUB_ACTOR: ${{ github.actor }}

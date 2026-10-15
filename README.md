@@ -185,6 +185,51 @@ processes, task affinities, provider authorities, authority string resources,
 and the injected providers. This is intended to let the patched build install
 beside `com.android.chrome`.
 
+**Trichrome dependency / installation (issue #35).** Modern Android Chrome
+uses a separate, required `TrichromeLibrary.apk` for its native browser code.
+The Chrome APK's `<uses-static-library>` entry pins the library **name,
+version, and certificate**. Renaming or re-signing the Chrome APK does not
+supply that library. If a matching Trichrome version is not on the device,
+Android rejects the patched Chrome installation with a missing-library error.
+The patch deliberately preserves the dependency: deleting the manifest entry
+does not create the native code Chrome needs.
+
+For a Trichrome-based Chrome APK:
+
+1. Obtain the **original Trichrome Library APK belonging to the same Chrome
+   release/build variant**, from a trusted source. It must match the exact
+   static-library version and signer certificate pinned in the Chrome manifest.
+   A random newer/older library or a re-signed library will **not** work.
+2. Install that library first if the matching version is not already installed,
+   then install the patched Chrome clone. Android can retain multiple versions
+   of static shared libraries. **Do not remove or replace** your system WebView
+   or its Trichrome Library in an attempt to force a match.
+3. For a desktop/ADB-assisted install, the repository includes a verifier
+   which checks the manifests and Trichrome signing certificate before install:
+
+```sh
+python3 tools/install-chrome-trichrome.py \
+  --chrome path/to/patched-chrome.apk \
+  --library path/to/matching-original-TrichromeLibrary.apk \
+  --install
+```
+
+Requires Android SDK `aapt2` and `apksigner` on `PATH` and, for
+`--install`, a connected ADB device. Omit `--install` to verify only.
+If Chrome has split APKs, supply **each correctly patched and re-signed**
+split using `--split path/to/split.apk`; the script then uses
+`adb install-multiple`. It does not download, patch, or re-sign any APK.
+You can also install the matched original library and patched Chrome APK in
+that order using an Android package installer that supports these APK types.
+
+If no matching library is available, this Trichrome Chrome APK **cannot be
+made standalone by editing the manifest**. Use an independently packaged
+Chromium build supported by the patcher, or a compatible Chrome build with
+its actual library dependency supplied. Android split-package and Chrome
+runtime/signature compatibility remain separate limitations; passing the
+library check alone does not guarantee a working Chrome clone. The script's
+tests use fixture manifests rather than actual APK installation.
+
 Changing Chrome's package and signing certificate can break Google-account
 sign-in, Chrome Sync, Play Integrity relationships, trusted WebAPK relationships,
 or other Google services that authorize the official package/signature pair.

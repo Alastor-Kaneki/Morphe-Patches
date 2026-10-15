@@ -154,7 +154,7 @@ private fun resolveChromeTheme(application: Element): String {
 @Suppress("unused")
 internal val addChromeUserscriptManifestPatch = resourcePatch(
     description =
-        "Registers the process-aware Chrome Material You userscript manager and patch-time Chrome cloning options."
+        "Registers the Chrome userscript manager and cloning options. Trichrome Chrome builds require the exact matching signed Trichrome Library APK to be installed first."
 ) {
     compatibleWith(CHROME)
 
@@ -389,7 +389,7 @@ internal val addChromeUserscriptManifestPatch = resourcePatch(
 val chromeUserscriptManagerPatch = bytecodePatch(
     name = "MonkeyScript userscript manager",
     description =
-        "Adds a Chrome 150 Material You userscript manager using a Violentmonkey-derived parser, native app-menu integration, guaranteed Fork-page installation, Greasy Fork/Sleazy Fork support, publishing, and configurable app/package cloning.",
+        "Adds the Chrome 150 Material You userscript manager and cloning. Trichrome builds need the matching original Trichrome Library APK installed before the patched Chrome APK.",
     default = true
 ) {
     compatibleWith(CHROME)
