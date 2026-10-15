@@ -186,8 +186,8 @@ and the injected providers. This is intended to let the patched build install
 beside `com.android.chrome`.
 
 **Trichrome dependency / installation (issue #35).** Modern Android Chrome
-uses a separate, required \`TrichromeLibrary.apk\` for its native browser code.
-The Chrome APK's \`<uses-static-library>\` entry pins the library **name,
+uses a separate, required `TrichromeLibrary.apk` for its native browser code.
+The Chrome APK's `<uses-static-library>` entry pins the library **name,
 version, and certificate**. Renaming or re-signing the Chrome APK does not
 supply that library. If a matching Trichrome version is not on the device,
 Android rejects the patched Chrome installation with a missing-library error.
@@ -207,18 +207,18 @@ For a Trichrome-based Chrome APK:
 3. For a desktop/ADB-assisted install, the repository includes a verifier
    which checks the manifests and Trichrome signing certificate before install:
 
-\`\`\`sh
+```sh
 python3 tools/install-chrome-trichrome.py \
   --chrome path/to/patched-chrome.apk \
   --library path/to/matching-original-TrichromeLibrary.apk \
   --install
-\`\`\`
+```
 
-Requires Android SDK \`aapt2\` and \`apksigner\` on \`PATH\` and, for
-\`--install\`, a connected ADB device. Omit \`--install\` to verify only.
+Requires Android SDK `aapt2` and `apksigner` on `PATH` and, for
+`--install`, a connected ADB device. Omit `--install` to verify only.
 If Chrome has split APKs, supply **each correctly patched and re-signed**
-split using \`--split path/to/split.apk\`; the script then uses
-\`adb install-multiple\`. It does not download, patch, or re-sign any APK.
+split using `--split path/to/split.apk`; the script then uses
+`adb install-multiple`. It does not download, patch, or re-sign any APK.
 You can also install the matched original library and patched Chrome APK in
 that order using an Android package installer that supports these APK types.
 
