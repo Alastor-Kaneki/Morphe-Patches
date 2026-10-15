@@ -1,3 +1,9 @@
+## [1.15.3](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.15.2...v1.15.3) (2026-10-15)
+
+### 🐛 Bug Fixes
+
+* **reddit:** retry blocked share redirects in browser and label errors ([#40](https://github.com/Alastor-Kaneki/Morphe-Patches/issues/40)) ([c79016c](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/c79016c5977b65c1fa94021bd167da8d1b34ba83))
+
 ## [1.15.2](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.15.1...v1.15.2) (2026-10-15)
 
 ### 🐛 Bug Fixes
