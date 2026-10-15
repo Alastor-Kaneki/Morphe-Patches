@@ -38,6 +38,12 @@ public final class RedditCurrentPost {
     public static Match detect(Activity activity) {
         if (activity == null) return null;
 
+        // The 2026.41.0-specific overflow event carries linkKindWithId as
+        // t3_<id>; this is stronger evidence than Activity or Compose scanning.
+        String eventPost = RedditNativeOverflowContext.recentPostId();
+        if (eventPost != null)
+            return new Match(eventPost, "native Reddit post overflow event");
+
         // A reused Reddit Activity can retain a stale startup intent. Prefer
         // the current resumed fragment and visible screen metadata instead.
         Match fragment = findActiveFragment(activity);
@@ -161,6 +167,9 @@ public final class RedditCurrentPost {
         b.append("Android API ").append(android.os.Build.VERSION.SDK_INT).append('\n');
         if (activity == null) return b.append("No foreground activity\n").toString();
         b.append("Activity: ").append(activity.getClass().getName()).append('\n');
+        b.append("Native overflow hook: ")
+                .append(RedditNativeOverflowContext.recentPostId() == null ?
+                        "NO RECENT EVENT" : "CAPTURED").append('\n');
         Match current = detect(activity);
         b.append("Detected: ").append(current == null ? "NONE" : current.postId + " (" + current.source + ")").append('\n');
         try {
