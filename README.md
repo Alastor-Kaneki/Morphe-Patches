@@ -6,7 +6,7 @@ patches are added to this project and built together into one `.mpp` bundle.
 ## Included patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.15.3](https://github.com/Alastor-Kaneki/Morphe-Patches/releases/tag/v1.15.3)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;11 patches total
+> **[v1.16.0](https://github.com/Alastor-Kaneki/Morphe-Patches/releases/tag/v1.16.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;12 patches total
 <details open>
 <summary>📦 Mods AddOns for Minecraft PE&nbsp;&nbsp;•&nbsp;&nbsp;4 patches</summary>
 <br>
@@ -48,12 +48,13 @@ patches are added to this project and built together into one `.mpp` bundle.
 </details>
 
 <details open>
-<summary>📦 Reddit&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
+<summary>📦 Reddit&nbsp;&nbsp;•&nbsp;&nbsp;2 patches</summary>
 <br>
 
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
 | [Download Reddit gallery originals](#download-reddit-gallery-originals) | Adds an in-app Download Originals button and share target. Fetches gallery metadata from Arctic Shift (fallback to Reddit) and saves original-quality images or a ZIP. |  |
+| [Reddit native post-menu originals (2026.41.0)](#reddit-native-post-menu-originals-2026-41-0) | Use Reddit's actual post overflow-menu event to identify the current post, show a contextual Save Originals action, and let the existing downloader save the original images or ZIP without a share link. |  |
 
 </details>
 

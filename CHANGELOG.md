@@ -1,3 +1,9 @@
+## [1.16.0](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.15.3...v1.16.0) (2026-10-15)
+
+### ✨ New Features
+
+* **reddit:** native 2026.41.0 overflow-menu post ID hook ([#42](https://github.com/Alastor-Kaneki/Morphe-Patches/issues/42)) ([72cdedb](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/72cdedb1abe68f94bec8b975e3d58a3cda992bb0))
+
 ## [1.15.3](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.15.2...v1.15.3) (2026-10-15)
 
 ### 🐛 Bug Fixes
