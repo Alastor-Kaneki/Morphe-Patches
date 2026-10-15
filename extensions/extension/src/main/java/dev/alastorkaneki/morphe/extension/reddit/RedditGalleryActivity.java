@@ -1,0 +1,347 @@
+package dev.alastorkaneki.morphe.extension.reddit;
+
+import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.ContentResolver;
+import android.content.ContentValues;
+import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.text.InputType;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+/** Self-contained Reddit patch UI; needs no access to Reddit's internal classes. */
+public final class RedditGalleryActivity extends Activity {
+    private static final int DARK = Color.rgb(14, 13, 19);
+    private static final int SURFACE = Color.rgb(29, 25, 38);
+    private static final int ACCENT = Color.rgb(169, 0, 255);
+    private static final int MUTED = Color.rgb(196, 190, 204);
+    private static final ExecutorService DOWNLOADS = Executors.newSingleThreadExecutor();
+
+    private EditText input;
+    private TextView status;
+    private Button saveImages;
+    private Button saveZip;
+    private ProgressBar progress;
+    private volatile boolean busy;
+
+    @Override public void onCreate(Bundle state) {
+        super.onCreate(state);
+        getWindow().setStatusBarColor(DARK);
+        getWindow().setNavigationBarColor(DARK);
+        buildUi();
+        handleIntent(getIntent());
+    }
+
+    @Override protected void onNewIntent(Intent next) {
+        super.onNewIntent(next);
+        setIntent(next);
+        handleIntent(next);
+    }
+
+    private void buildUi() {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(DARK);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        int gap = dp(18);
+        root.setPadding(gap, dp(24), gap, gap);
+        scroll.addView(root);
+        setContentView(scroll);
+
+        TextView title = label("Reddit Gallery Originals", 23, Color.WHITE);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        root.addView(title);
+
+        TextView hint = label(
+                "Save gallery images from i.redd.it at their original available quality. " +
+                "Uses Arctic Shift metadata first, then Reddit. No previews, sign-in, or cookies.",
+                14, MUTED);
+        hint.setPadding(0, dp(12), 0, dp(15));
+        root.addView(hint);
+
+        input = new EditText(this);
+        input.setSingleLine(true);
+        input.setTextColor(Color.WHITE);
+        input.setHintTextColor(MUTED);
+        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        input.setHint("https://reddit.com/gallery/…");
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        input.setPadding(dp(12), dp(12), dp(12), dp(12));
+        input.setBackground(roundRect(SURFACE, dp(12)));
+        root.addView(input, new LinearLayout.LayoutParams(-1, -2));
+
+        Button paste = button("Paste Reddit link", SURFACE);
+        LinearLayout.LayoutParams pasteParams = new LinearLayout.LayoutParams(-1, dp(49));
+        pasteParams.topMargin = dp(10);
+        root.addView(paste, pasteParams);
+        paste.setOnClickListener(v -> {
+            String clip = readClipboard();
+            if (clip == null) {
+                toast("Clipboard does not contain a Reddit gallery/post link.");
+            } else {
+                input.setText(clip);
+                input.setSelection(input.length());
+            }
+        });
+
+        saveImages = button("Save original images to Pictures", ACCENT);
+        LinearLayout.LayoutParams imageParams = new LinearLayout.LayoutParams(-1, dp(54));
+        imageParams.topMargin = dp(20);
+        root.addView(saveImages, imageParams);
+        saveImages.setOnClickListener(v -> startDownload(false));
+
+        saveZip = button("Download originals as ZIP", SURFACE);
+        LinearLayout.LayoutParams zipParams = new LinearLayout.LayoutParams(-1, dp(54));
+        zipParams.topMargin = dp(10);
+        root.addView(saveZip, zipParams);
+        saveZip.setOnClickListener(v -> startDownload(true));
+
+        progress = new ProgressBar(this);
+        progress.setIndeterminate(true);
+        progress.setVisibility(android.view.View.GONE);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(-1, dp(42));
+        progressParams.topMargin = dp(12);
+        root.addView(progress, progressParams);
+
+        status = label("Ready. Share a Reddit link or paste one above.", 13, MUTED);
+        status.setPadding(0, dp(8), 0, dp(12));
+        root.addView(status);
+        root.addView(label(
+                "Images: Pictures/RedditGallery/<post ID> · ZIP: Downloads. " +
+                "The archive does not guarantee deleted or private media still exists on the CDN.",
+                12, MUTED));
+    }
+
+    private void handleIntent(Intent intent) {
+        if (intent == null || input == null) return;
+        String text = intent.getDataString();
+        if (text == null) {
+            CharSequence shared = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            if (shared != null) text = shared.toString();
+        }
+        if (RedditGalleryLink.postId(text) == null) text = readClipboard();
+        if (RedditGalleryLink.postId(text) != null) {
+            input.setText(text);
+            input.setSelection(input.length());
+        }
+    }
+
+    private String readClipboard() {
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (clipboard == null || !clipboard.hasPrimaryClip()) return null;
+            ClipData data = clipboard.getPrimaryClip();
+            if (data == null || data.getItemCount() == 0) return null;
+            CharSequence text = data.getItemAt(0).coerceToText(this);
+            String candidate = text == null ? null : text.toString();
+            return RedditGalleryLink.postId(candidate) == null ? null : candidate;
+        } catch (RuntimeException ignored) { return null; }
+    }
+
+    private void startDownload(boolean zip) {
+        if (busy) return;
+        String id = RedditGalleryLink.postId(input.getText().toString());
+        if (id == null) {
+            status.setText("Paste a Reddit post or gallery URL (not an image preview URL).");
+            return;
+        }
+        busy = true;
+        saveImages.setEnabled(false);
+        saveZip.setEnabled(false);
+        progress.setVisibility(android.view.View.VISIBLE);
+        status.setText("Resolving gallery " + id + "…");
+        DOWNLOADS.execute(() -> {
+            String result;
+            try {
+                RedditGalleryResolver.Gallery gallery = RedditGalleryResolver.resolve(id);
+                showStatus("Found " + gallery.photos.size() + " originals via " + gallery.source);
+                result = zip ? downloadZip(gallery) : downloadPhotos(gallery);
+            } catch (Exception error) {
+                result = "Failed: " + error.getClass().getSimpleName() + ": " + error.getMessage();
+            }
+            final String finalResult = result;
+            runOnUiThread(() -> {
+                busy = false;
+                saveImages.setEnabled(true);
+                saveZip.setEnabled(true);
+                progress.setVisibility(android.view.View.GONE);
+                status.setText(finalResult);
+                toast(finalResult.length() > 90 ? finalResult.substring(0, 90) : finalResult);
+            });
+        });
+    }
+
+    private String downloadZip(RedditGalleryResolver.Gallery gallery) throws IOException {
+        File staged = File.createTempFile("reddit-gallery-", ".zip", getCacheDir());
+        try {
+            try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(staged))) {
+                for (int index = 0; index < gallery.photos.size(); index++) {
+                    RedditGalleryResolver.Photo photo = gallery.photos.get(index);
+                    showStatus("Downloading original " + (index + 1) + "/" + gallery.photos.size() +
+                            " to ZIP…");
+                    zip.putNextEntry(new ZipEntry(photo.name));
+                    RedditGalleryResolver.streamOriginal(photo, (source, maxBytes) ->
+                            copyBounded(source, zip, maxBytes));
+                    zip.closeEntry();
+                }
+                zip.putNextEntry(new ZipEntry("manifest.txt"));
+                String manifest = "Reddit: https://www.reddit.com/gallery/" + gallery.id +
+                        "\nSource: " + gallery.source + "\nOriginal images: " +
+                        gallery.photos.size() + "\nNo resized previews included.\n";
+                zip.write(manifest.getBytes(StandardCharsets.UTF_8));
+                zip.closeEntry();
+            }
+            String filename = "reddit_gallery_" + gallery.id + ".zip";
+            Uri destination = createDestination(filename, "application/zip", false, gallery.id);
+            try {
+                try (InputStream source = new java.io.FileInputStream(staged);
+                     OutputStream out = getContentResolver().openOutputStream(destination, "w")) {
+                    if (out == null) throw new IOException("Android could not open the ZIP destination");
+                    copyBounded(source, out, 1024 * 1024 * 1024);
+                }
+                complete(destination);
+            } catch (Exception error) {
+                getContentResolver().delete(destination, null, null);
+                throw error instanceof IOException ? (IOException) error :
+                        new IOException("Could not save ZIP", error);
+            }
+            return "Saved " + gallery.photos.size() + " originals in Downloads/" + filename;
+        } finally {
+            if (staged.exists() && !staged.delete()) staged.deleteOnExit();
+        }
+    }
+
+    private String downloadPhotos(RedditGalleryResolver.Gallery gallery) throws IOException {
+        int done = 0;
+        IOException lastFailure = null;
+        for (int index = 0; index < gallery.photos.size(); index++) {
+            RedditGalleryResolver.Photo photo = gallery.photos.get(index);
+            showStatus("Saving original " + (index + 1) + "/" + gallery.photos.size() + "…");
+            Uri destination = null;
+            try {
+                destination = createDestination(photo.name, photo.mime, true, gallery.id);
+                Uri saved = destination;
+                RedditGalleryResolver.streamOriginal(photo, (source, maxBytes) -> {
+                    try (OutputStream out = getContentResolver().openOutputStream(saved, "w")) {
+                        if (out == null) throw new IOException("Android refused image output stream");
+                        copyBounded(source, out, maxBytes);
+                    }
+                });
+                complete(destination);
+                done++;
+            } catch (IOException | RuntimeException e) {
+                lastFailure = new IOException(photo.name + ": " + e.getMessage(), e);
+                if (destination != null) getContentResolver().delete(destination, null, null);
+            }
+        }
+        if (done == 0) throw new IOException("No originals saved. Last failure: " +
+                (lastFailure == null ? "unknown" : lastFailure.getMessage()));
+        String summary = "Saved " + done + "/" + gallery.photos.size() +
+                " originals in Pictures/RedditGallery/" + gallery.id;
+        if (lastFailure != null) summary += " (some failed: " + lastFailure.getMessage() + ")";
+        return summary;
+    }
+
+    private Uri createDestination(String name, String mime, boolean image, String id)
+            throws IOException {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q)
+            throw new IOException("This patch requires Android 10+ for public MediaStore downloads");
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+        values.put(MediaStore.MediaColumns.MIME_TYPE, mime);
+        values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, image ?
+                Environment.DIRECTORY_PICTURES + "/RedditGallery/" + id :
+                Environment.DIRECTORY_DOWNLOADS);
+        Uri collection = image ? MediaStore.Images.Media.EXTERNAL_CONTENT_URI :
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI;
+        Uri uri = getContentResolver().insert(collection, values);
+        if (uri == null) throw new IOException("Android could not reserve a Downloads entry");
+        return uri;
+    }
+
+    private void complete(Uri uri) {
+        ContentValues done = new ContentValues();
+        done.put(MediaStore.MediaColumns.IS_PENDING, 0);
+        getContentResolver().update(uri, done, null, null);
+    }
+
+    private static void copyBounded(InputStream in, OutputStream out, int maxBytes)
+            throws IOException {
+        byte[] buffer = new byte[16384];
+        int count = 0;
+        int read;
+        while ((read = in.read(buffer)) != -1) {
+            count += read;
+            if (count > maxBytes) throw new IOException("Original exceeds safe size limit");
+            out.write(buffer, 0, read);
+        }
+    }
+
+    private void showStatus(String message) {
+        runOnUiThread(() -> {
+            if (status != null) status.setText(message);
+        });
+    }
+
+    private TextView label(String text, int sp, int color) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(color);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        return view;
+    }
+
+    private Button button(String text, int color) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setTextColor(Color.WHITE);
+        button.setAllCaps(false);
+        button.setBackground(roundRect(color, dp(13)));
+        return button;
+    }
+
+    private GradientDrawable roundRect(int color, int radius) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(radius);
+        return drawable;
+    }
+
+    private int dp(int value) {
+        return Math.round(getResources().getDisplayMetrics().density * value);
+    }
+
+    private void toast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
+}

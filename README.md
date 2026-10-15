@@ -280,6 +280,37 @@ source in the patched app's private storage. It does not upload the script
 library, browser history, credentials, or page contents. Files without a valid
 userscript metadata block are rejected or disabled until reviewed.
 
+### Reddit — Download gallery originals
+
+Targets the official Android Reddit app (`com.reddit.frontpage`). The **opt-in,
+experimental** Morphe patch adds an in-app **↓ Originals** pill and a text/plain
+share target. Tap it on a post, paste a Reddit gallery link (or use a copied
+post URL), and choose:
+
+- **Save original images to Pictures** — `Pictures/RedditGallery/<post ID>/`.
+- **Download originals as ZIP** — `Downloads/reddit_gallery_<post ID>.zip`.
+
+The patch tries Arctic Shift's public archived post metadata first and Reddit
+JSON second. Only URLs built for `https://i.redd.it/` are downloaded; Reddit
+preview URLs, their resizing parameters and third-party image hosts are never
+used. It recognizes `image/jpg` as JPEG, fixes the MIME mismatch found in
+Gallery Goblin v4, checks original image signatures before saving, and enforces
+per-image bounds. File writes use Android MediaStore, so **Android 10 or newer**
+is required for this initial implementation.
+
+The button launches a separate page: it does **not** hook Reddit's private
+download/viewer methods or silently capture cookies. The post URL may need
+pasting if Reddit does not expose its current navigation URL through the
+foreground Activity. Downloading is performed by the activity while the patched
+app remains running; background survival and compatibility with individual
+Reddit APK versions have not been tested. Private/deleted media might not be
+available in Arctic Shift or on the Reddit image CDN.
+
+**Testing:** `bash tools/test-reddit-gallery.sh` and
+`gradle buildAndroid`. Validate on a patched Reddit APK before relying on it
+for large gallery downloads. Source remains modular under `patches/.../reddit/`
+and `extensions/.../reddit/`.
+
 ## Build
 
 Requirements:
