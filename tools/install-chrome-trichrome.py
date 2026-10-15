@@ -21,11 +21,19 @@ class CheckError(Exception):
 
 def records(badging, record_type):
     prefix = record_type + ":"
-    return [
-        dict(FIELDS.findall(line))
-        for line in badging.splitlines()
-        if line.strip().startswith(prefix)
-    ]
+    parsed = []
+    for line in badging.splitlines():
+        if not line.strip().startswith(prefix):
+            continue
+        pairs = FIELDS.findall(line)
+        entry = dict(pairs)
+        # AAPT2 can emit multiple certDigest values for signing rotation.
+        if record_type == "uses-static-library":
+            entry["certDigests"] = [
+                value for key, value in pairs if key == "certDigest"
+            ]
+        parsed.append(entry)
+    return parsed
 
 
 def trichrome_requirement(chrome_badging):
@@ -66,14 +74,18 @@ def validate_library(requirement, library_badging, certificate_output):
             f"provided: {found}. Obtain the matching library for THIS Chrome APK."
         )
 
-    expected = requirement.get("certDigest")
+    expected_values = requirement.get("certDigests") or [
+        requirement.get("certDigest")
+    ]
+    expected = {
+        normalized_digest(value) for value in expected_values if value
+    }
     if not expected:
         raise CheckError("Chrome's Trichrome dependency has no certificate digest.")
-    expected = normalized_digest(expected)
     signed = {normalized_digest(d) for d in SIGNER_SHA256.findall(certificate_output)}
     if not signed:
         raise CheckError("Could not read a signer SHA-256 digest from apksigner.")
-    if expected not in signed:
+    if expected.isdisjoint(signed):
         raise CheckError(
             "Trichrome certificate does not match Chrome's pinned certDigest. "
             "Do not re-sign the Trichrome Library APK; use its matching original."
