@@ -290,6 +290,35 @@ source in the patched app's private storage. It does not upload the script
 library, browser history, credentials, or page contents. Files without a valid
 userscript metadata block are rejected or disabled until reviewed.
 
+### Reddit 2026.41.0 — Native post overflow integration
+
+This **additional opt-in patch**, `Reddit native post-menu originals (2026.41.0)`,
+was developed against the user's real Reddit 2026.41.0 APK bundle
+(versionCode `2641021`, base APK + density/ABI/language splits). It depends on
+**Download Reddit gallery originals** and keeps the working Android Share target.
+
+Static DEX inspection established that
+`com.reddit.feeds.ui.events.OnOverflowMenuOpened` has a primary
+constructor beginning with `String linkKindWithId`. The first instruction
+invokes the superclass constructor, so a passive `invoke-static { p1 }`
+post-context hook is inserted immediately afterward. A separate Android
+bridge validates `t3_<post ID>` (rejecting comments/subreddits), caches it
+briefly, and shows a contextual **Save originals** quick action in the Reddit
+activity. The existing **↓ Originals** button now uses that exact native
+context before attempting the old generic fragment/activity detector. Images
+and ZIPs still come from the original `i.redd.it` CDN via the existing
+Arctic Shift resolver; no clipboard or manually entered URL is needed after
+opening a supported post's overflow menu.
+
+**Compatibility/limitations:** This hook is restricted to the exact
+`2026.41.0` app. The contextual action is an in-app Android view, **not
+yet** a row inserted into Reddit's proprietary action sheet; some dialog
+window implementations can obscure the quick action. Close the native menu
+then tap **↓ Originals** if the contextual action is covered. APK splitting,
+patch application, signing, installation and on-device behavior still require
+testing. The original APK is *not* copied into this repository. This patch
+does not modify the unrelated Morphe patches.
+
 ### Reddit — Download gallery originals
 
 Targets the official Android Reddit app (`com.reddit.frontpage`). The **opt-in,
