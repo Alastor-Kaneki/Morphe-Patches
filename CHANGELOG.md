@@ -1,3 +1,9 @@
+## [1.15.0](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.14.2...v1.15.0) (2026-10-15)
+
+### ✨ New Features
+
+* **reddit:** add original-quality gallery downloader patch ([#37](https://github.com/Alastor-Kaneki/Morphe-Patches/issues/37)) ([b6ab78c](https://github.com/Alastor-Kaneki/Morphe-Patches/commit/b6ab78ce133c61f99413f17c15eae278f10292e6))
+
 ## [1.14.2](https://github.com/Alastor-Kaneki/Morphe-Patches/compare/v1.14.1...v1.14.2) (2026-10-15)
 
 ### 🐛 Bug Fixes

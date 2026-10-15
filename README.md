@@ -6,7 +6,7 @@ patches are added to this project and built together into one `.mpp` bundle.
 ## Included patches
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.14.2](https://github.com/Alastor-Kaneki/Morphe-Patches/releases/tag/v1.14.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;10 patches total
+> **[v1.15.0](https://github.com/Alastor-Kaneki/Morphe-Patches/releases/tag/v1.15.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;11 patches total
 <details open>
 <summary>📦 Mods AddOns for Minecraft PE&nbsp;&nbsp;•&nbsp;&nbsp;4 patches</summary>
 <br>
@@ -44,6 +44,16 @@ patches are added to this project and built together into one `.mpp` bundle.
 |----------|----------------|-----------|
 | [Download GX mods as files](#download-gx-mods-as-files) | Adds a visible Download Mod button in Opera GX, with URL auto-detection and a Share fallback. |  |
 | [GX icon pack](#gx-icon-pack) | Adds a separate native selector for all 56 Opera GX launcher icons. Open it from the GX Icon Pack long-press shortcut. |  |
+
+</details>
+
+<details open>
+<summary>📦 Reddit&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
+<br>
+
+| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
+|----------|----------------|-----------|
+| [Download Reddit gallery originals](#download-reddit-gallery-originals) | Adds an in-app Download Originals button and share target. Fetches gallery metadata from Arctic Shift (fallback to Reddit) and saves original-quality images or a ZIP. |  |
 
 </details>
 
