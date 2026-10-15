@@ -26,6 +26,9 @@ jobs:
         with:
           gradle-version: '9.6.1'
 
+      - name: Test Reddit gallery link extraction
+        run: bash tools/test-reddit-gallery.sh
+
       - name: Test GX URL resolver
         run: bash tools/test-parser.sh
 
